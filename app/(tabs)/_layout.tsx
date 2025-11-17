@@ -1,10 +1,10 @@
+import { HapticTab } from '@/components/haptic-tab';
+import { Colors, buddiColors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Feather } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import React from 'react';
-
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Platform, StyleSheet, View } from 'react-native';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
@@ -13,23 +13,82 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+        tabBarInactiveTintColor: buddiColors.textSecondary,
         headerShown: false,
         tabBarButton: HapticTab,
+        tabBarStyle: {
+          height: Platform.OS === 'ios' ? 90 : 60,
+          paddingBottom: Platform.OS === 'ios' ? 2 : 4,
+          paddingTop: 8,
+          backgroundColor: buddiColors.surface,
+          borderTopWidth: 1,
+          borderTopColor: buddiColors.surfaceBorder,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '500',
+        },
       }}>
       <Tabs.Screen
-        name="index"
+        name="profile"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          title: 'Profile',
+          tabBarIcon: ({ color }) => <Feather name="user" size={24} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="adventures"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          title: 'Adventures',
+          tabBarIcon: ({ color }) => <Feather name="map-pin" size={24} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: 'Discover',
+          tabBarIcon: ({ color, focused }) => (
+            <View style={focused ? styles.activeTabIcon : undefined}>
+              <Feather 
+                name="compass" 
+                size={24} 
+                color={focused ? buddiColors.textOnDark : color} 
+              />
+            </View>
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="messages"
+        options={{
+          title: 'Messages',
+          tabBarIcon: ({ color }) => <Feather name="message-circle" size={24} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="matches"
+        options={{
+          title: 'Matches',
+          tabBarIcon: ({ color }) => <Feather name="heart" size={24} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="chat"
+        options={{
+          href: null, // Hide from tab bar
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  activeTabIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: buddiColors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
