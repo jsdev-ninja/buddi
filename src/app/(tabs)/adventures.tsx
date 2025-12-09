@@ -1,6 +1,8 @@
+import { CreateGroupModal } from '@/components/CreateGroupModal';
 import { buddiColors } from '@/constants/theme';
 import { Card } from '@/lib/components/Card';
 import { trendingAdventures } from '@/lib/data/mockData';
+import type { CreateGroupInput } from '@/lib/schemas/group';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
@@ -11,6 +13,7 @@ type TabType = 'adventure' | 'myGroups' | 'completed';
 export default function AdventuresScreen() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabType>('adventure');
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
 
   return (
     <View style={styles.container}>
@@ -47,7 +50,7 @@ export default function AdventuresScreen() {
             </Pressable>
             <Pressable 
               style={[styles.actionButton, styles.createButton]}
-              onPress={() => {}}
+              onPress={() => setShowCreateGroup(true)}
             >
               <Feather name="plus" size={20} color={buddiColors.textOnDark} />
               <Text style={[styles.actionButtonText, styles.createButtonText]}>Create Group</Text>
@@ -130,6 +133,16 @@ export default function AdventuresScreen() {
           ))}
         </View>
       </ScrollView>
+
+      <CreateGroupModal
+        visible={showCreateGroup}
+        onClose={() => setShowCreateGroup(false)}
+        onSubmit={(data: CreateGroupInput) => {
+          console.log('Group created:', data);
+          // TODO: Implement group creation API call
+          setShowCreateGroup(false);
+        }}
+      />
     </View>
   );
 }

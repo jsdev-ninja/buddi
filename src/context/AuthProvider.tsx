@@ -1,25 +1,30 @@
 import type { User } from '@/lib/atoms/user';
 import { authLoadingAtom, storage, userAtom } from '@/lib/atoms/user';
-import { firebaseApi } from '@/services/firebase';
 import { Provider, useAtom, useSetAtom } from 'jotai';
 import { useEffect } from 'react';
 
+// Mock user for development
+const MOCK_USER: User = {
+	uid: 'mock-user-123',
+	email: 'mock.user@example.com',
+	displayName: 'Mock User',
+	photoURL: null,
+};
+
 // Hook to use authentication
 export function useAuth() {
-	const [user, setUser] = useAtom(userAtom);
-	const [isLoading, setIsLoading] = useAtom(authLoadingAtom);
+	const [user] = useAtom(userAtom);
+	const [isLoading] = useAtom(authLoadingAtom);
 	const setUserAtom = useSetAtom(userAtom);
 	const setLoadingAtom = useSetAtom(authLoadingAtom);
 
 	const signIn = async () => {
 		try {
 			setLoadingAtom(true);
-			const userData = await firebaseApi.auth.loginWithGoogle();
-			if (userData) {
-				setUserAtom(userData);
-				// Persist to storage
-				await storage.setItem('user', JSON.stringify(userData));
-			}
+			// Use mock user instead of Firebase auth
+			setUserAtom(MOCK_USER);
+			// Persist to storage
+			await storage.setItem('user', JSON.stringify(MOCK_USER));
 		} catch (error) {
 			console.error('Sign in error:', error);
 			throw error;
@@ -31,7 +36,7 @@ export function useAuth() {
 	const signOut = async () => {
 		try {
 			setLoadingAtom(true);
-			await firebaseApi.auth.signOut();
+			// Clear user (for testing purposes)
 			setUserAtom(null);
 			// Remove from storage
 			await storage.removeItem('user');
@@ -63,46 +68,21 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
 			// Set initial loading state
 			setIsLoading(true);
 
-			// Try to load user from storage first
-			try {
-				const stored = await storage.getItem('user');
-				if (stored && mounted) {
-					const userData = JSON.parse(stored) as User;
-					setUser(userData);
-				}
-			} catch {
-				// Ignore storage errors
+			// Use mock user instead of Firebase auth
+			if (mounted) {
+				setUser(MOCK_USER);
+				// Sync to storage
+				await storage.setItem('user', JSON.stringify(MOCK_USER)).catch(() => {
+					// Ignore errors
+				});
+				setIsLoading(false);
 			}
-
-			// Listen to auth state changes from Firebase
-			const unsubscribe = firebaseApi.auth.onAuthStateChanged((user) => {
-				if (mounted) {
-					setUser(user);
-					if (user) {
-						// Sync to storage
-						storage.setItem('user', JSON.stringify(user)).catch(() => {
-							// Ignore errors
-						});
-					} else {
-						// Remove from storage
-						storage.removeItem('user').catch(() => {
-							// Ignore errors
-						});
-					}
-					setIsLoading(false);
-				}
-			});
-
-			return () => {
-				unsubscribe();
-			};
 		};
 
-		const cleanup = initializeAuth();
+		initializeAuth();
 
 		return () => {
 			mounted = false;
-			cleanup.then((unsubscribe) => unsubscribe?.());
 		};
 	}, [setUser, setIsLoading]);
 

@@ -1,13 +1,16 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
+import { CreateGroupModal } from '@/components/CreateGroupModal';
 import { buddiColors } from '@/constants/theme';
 import { conversations } from '@/lib/data/mockData';
+import type { CreateGroupInput } from '@/lib/schemas/group';
+import { Feather } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 export default function MessagesScreen() {
   const router = useRouter();
   const hasConversations = conversations.length > 0;
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
 
   return (
     <View style={styles.container}>
@@ -33,7 +36,7 @@ export default function MessagesScreen() {
             <Text style={styles.liveText}>Live</Text>
           </View>
         </View>
-        <Pressable style={styles.createGroupButton}>
+        <Pressable style={styles.createGroupButton} onPress={() => setShowCreateGroup(true)}>
           <Text style={styles.createGroupText}>+ Create Group</Text>
         </Pressable>
       </View>
@@ -83,6 +86,16 @@ export default function MessagesScreen() {
           </View>
         )}
       </ScrollView>
+
+      <CreateGroupModal
+        visible={showCreateGroup}
+        onClose={() => setShowCreateGroup(false)}
+        onSubmit={(data: CreateGroupInput) => {
+          console.log('Group created:', data);
+          // TODO: Implement group creation API call
+          setShowCreateGroup(false);
+        }}
+      />
     </View>
   );
 }
