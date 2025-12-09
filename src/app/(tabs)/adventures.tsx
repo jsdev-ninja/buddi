@@ -1,10 +1,12 @@
 import { CreateGroupModal } from '@/components/CreateGroupModal';
 import { buddiColors } from '@/constants/theme';
+import { completedGroupsAtom, createGroupFromInput, userGroupsAtom } from '@/lib/atoms/groups';
 import { Card } from '@/lib/components/Card';
 import { trendingAdventures } from '@/lib/data/mockData';
 import type { CreateGroupInput } from '@/lib/schemas/group';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useAtom } from 'jotai';
 import React, { useState } from 'react';
 import { ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -14,6 +16,8 @@ export default function AdventuresScreen() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabType>('adventure');
   const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [userGroups, setUserGroups] = useAtom(userGroupsAtom);
+  const [completedGroups] = useAtom(completedGroupsAtom);
 
   return (
     <View style={styles.container}>
@@ -86,52 +90,192 @@ export default function AdventuresScreen() {
           </View>
         </View>
 
-        {/* Trending Adventures Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Feather name="trending-up" size={20} color={buddiColors.primary} />
-            <Text style={styles.sectionTitle}>Trending Adventures</Text>
-          </View>
+        {/* Tab Content */}
+        {activeTab === 'adventure' && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Feather name="trending-up" size={20} color={buddiColors.primary} />
+              <Text style={styles.sectionTitle}>Trending Adventures</Text>
+            </View>
 
-          {trendingAdventures.map((adventure) => (
-            <Card key={adventure.id} style={styles.adventureCard}>
-              <ImageBackground
-                source={adventure.coverPhoto}
-                resizeMode="cover"
-                style={styles.cardImage}
-              >
-                <View style={styles.cardOverlay}>
-                  {/* Tags */}
-                  <View style={styles.tagsContainer}>
-                    <View style={styles.tagWhite}>
-                      <Text style={styles.tagTextWhite}>{adventure.category}</Text>
-                    </View>
-                    <View style={styles.tagOrange}>
-                      <Text style={styles.tagTextOrange}>{adventure.difficulty}</Text>
+            {trendingAdventures.map((adventure) => (
+              <Card key={adventure.id} style={styles.adventureCard}>
+                <ImageBackground
+                  source={adventure.coverPhoto}
+                  resizeMode="cover"
+                  style={styles.cardImage}
+                >
+                  <View style={styles.cardOverlay}>
+                    {/* Tags */}
+                    <View style={styles.tagsContainer}>
+                      <View style={styles.tagWhite}>
+                        <Text style={styles.tagTextWhite}>{adventure.category}</Text>
+                      </View>
+                      <View style={styles.tagOrange}>
+                        <Text style={styles.tagTextOrange}>{adventure.difficulty}</Text>
+                      </View>
                     </View>
                   </View>
-                </View>
-              </ImageBackground>
+                </ImageBackground>
 
-              {/* Card Content */}
-              <View style={styles.cardContent}>
-                <Text style={styles.adventureName}>{adventure.name}</Text>
-                <View style={styles.adventureMeta}>
-                  <View style={styles.metaRow}>
-                    <Feather name="map-pin" size={16} color={buddiColors.textSecondary} />
-                    <Text style={styles.metaText}>{adventure.destination}</Text>
-                  </View>
-                  {adventure.progress && (
+                {/* Card Content */}
+                <View style={styles.cardContent}>
+                  <Text style={styles.adventureName}>{adventure.name}</Text>
+                  <View style={styles.adventureMeta}>
                     <View style={styles.metaRow}>
-                      <Feather name="layers" size={16} color={buddiColors.textSecondary} />
-                      <Text style={styles.metaText}>{adventure.progress}</Text>
+                      <Feather name="map-pin" size={16} color={buddiColors.textSecondary} />
+                      <Text style={styles.metaText}>{adventure.destination}</Text>
                     </View>
-                  )}
+                    {adventure.progress && (
+                      <View style={styles.metaRow}>
+                        <Feather name="layers" size={16} color={buddiColors.textSecondary} />
+                        <Text style={styles.metaText}>{adventure.progress}</Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
-              </View>
-            </Card>
-          ))}
-        </View>
+              </Card>
+            ))}
+          </View>
+        )}
+
+        {activeTab === 'myGroups' && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Feather name="users" size={20} color={buddiColors.primary} />
+              <Text style={styles.sectionTitle}>My Groups ({userGroups.length})</Text>
+            </View>
+
+            {userGroups.length === 0 ? (
+              <Card style={styles.emptyCard}>
+                <View style={styles.emptyState}>
+                  <Feather name="users" size={48} color={buddiColors.surfaceBorder} />
+                  <Text style={styles.emptyTitle}>No groups yet</Text>
+                  <Text style={styles.emptySubtitle}>
+                    Create your first group to start planning adventures!
+                  </Text>
+                  <Pressable 
+                    style={styles.createGroupEmptyButton}
+                    onPress={() => setShowCreateGroup(true)}
+                  >
+                    <Feather name="plus" size={20} color={buddiColors.textOnDark} />
+                    <Text style={styles.createGroupEmptyText}>Create Group</Text>
+                  </Pressable>
+                </View>
+              </Card>
+            ) : (
+              userGroups.map((group) => (
+                <Card key={group.id} style={styles.adventureCard}>
+                  <ImageBackground
+                    source={group.coverPhoto}
+                    resizeMode="cover"
+                    style={styles.cardImage}
+                  >
+                    <View style={styles.cardOverlay}>
+                      {/* Tags */}
+                      <View style={styles.tagsContainer}>
+                        {group.tags.slice(0, 2).map((tag, idx) => (
+                          <View key={idx} style={styles.tagWhite}>
+                            <Text style={styles.tagTextWhite}>{tag}</Text>
+                          </View>
+                        ))}
+                        <View style={styles.tagOrange}>
+                          <Text style={styles.tagTextOrange}>{group.activityType}</Text>
+                        </View>
+                      </View>
+                    </View>
+                  </ImageBackground>
+
+                  {/* Card Content */}
+                  <View style={styles.cardContent}>
+                    <Text style={styles.adventureName}>{group.name}</Text>
+                    <View style={styles.adventureMeta}>
+                      <View style={styles.metaRow}>
+                        <Feather name="map-pin" size={16} color={buddiColors.textSecondary} />
+                        <Text style={styles.metaText}>{group.destination}</Text>
+                      </View>
+                      <View style={styles.metaRow}>
+                        <Feather name="users" size={16} color={buddiColors.textSecondary} />
+                        <Text style={styles.metaText}>
+                          {group.currentMembers}/{group.maxMembers}
+                        </Text>
+                      </View>
+                    </View>
+                    {group.description && (
+                      <Text style={styles.groupDescription} numberOfLines={2}>
+                        {group.description}
+                      </Text>
+                    )}
+                    {(group.startDate || group.endDate) && (
+                      <View style={styles.metaRow}>
+                        <Feather name="calendar" size={14} color={buddiColors.textSecondary} />
+                        <Text style={styles.dateText}>
+                          {group.startDate && group.endDate
+                            ? `${group.startDate} - ${group.endDate}`
+                            : group.startDate || group.endDate}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </Card>
+              ))
+            )}
+          </View>
+        )}
+
+        {activeTab === 'completed' && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Feather name="check-circle" size={20} color={buddiColors.primary} />
+              <Text style={styles.sectionTitle}>Completed Adventures</Text>
+            </View>
+
+            {completedGroups.length === 0 ? (
+              <Card style={styles.emptyCard}>
+                <View style={styles.emptyState}>
+                  <Feather name="check-circle" size={48} color={buddiColors.surfaceBorder} />
+                  <Text style={styles.emptyTitle}>No completed adventures yet</Text>
+                  <Text style={styles.emptySubtitle}>
+                    Your completed adventures will appear here.
+                  </Text>
+                </View>
+              </Card>
+            ) : (
+              completedGroups.map((group) => (
+                <Card key={group.id} style={styles.adventureCard}>
+                  <ImageBackground
+                    source={group.coverPhoto}
+                    resizeMode="cover"
+                    style={styles.cardImage}
+                  >
+                    <View style={styles.cardOverlay}>
+                      <View style={styles.tagsContainer}>
+                        {group.tags.slice(0, 2).map((tag, idx) => (
+                          <View key={idx} style={styles.tagWhite}>
+                            <Text style={styles.tagTextWhite}>{tag}</Text>
+                          </View>
+                        ))}
+                        <View style={styles.tagOrange}>
+                          <Text style={styles.tagTextOrange}>{group.activityType}</Text>
+                        </View>
+                      </View>
+                    </View>
+                  </ImageBackground>
+
+                  <View style={styles.cardContent}>
+                    <Text style={styles.adventureName}>{group.name}</Text>
+                    <View style={styles.adventureMeta}>
+                      <View style={styles.metaRow}>
+                        <Feather name="map-pin" size={16} color={buddiColors.textSecondary} />
+                        <Text style={styles.metaText}>{group.destination}</Text>
+                      </View>
+                    </View>
+                  </View>
+                </Card>
+              ))
+            )}
+          </View>
+        )}
       </ScrollView>
 
       <CreateGroupModal
@@ -139,8 +283,12 @@ export default function AdventuresScreen() {
         onClose={() => setShowCreateGroup(false)}
         onSubmit={(data: CreateGroupInput) => {
           console.log('Group created:', data);
-          // TODO: Implement group creation API call
+          // Convert to AdventureGroup and add to user groups
+          const newGroup = createGroupFromInput(data);
+          setUserGroups((prev) => [...prev, newGroup]);
           setShowCreateGroup(false);
+          // Switch to My Groups tab to see the newly created group
+          setActiveTab('myGroups');
         }}
       />
     </View>
@@ -316,6 +464,53 @@ const styles = StyleSheet.create({
   },
   metaText: {
     fontSize: 14,
+    color: buddiColors.textSecondary,
+  },
+  emptyCard: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 200,
+  },
+  emptyState: {
+    alignItems: 'center',
+    gap: 12,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: buddiColors.textPrimary,
+    marginTop: 8,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: buddiColors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  createGroupEmptyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: buddiColors.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  createGroupEmptyText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: buddiColors.textOnDark,
+  },
+  groupDescription: {
+    fontSize: 14,
+    color: buddiColors.textSecondary,
+    marginTop: 8,
+    lineHeight: 20,
+  },
+  dateText: {
+    fontSize: 12,
     color: buddiColors.textSecondary,
   },
 });
