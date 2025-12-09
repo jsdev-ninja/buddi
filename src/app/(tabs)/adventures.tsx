@@ -20,7 +20,7 @@ export default function AdventuresScreen() {
           <View style={styles.logoIcon}>
             <Feather name="map-pin" size={20} color={buddiColors.textOnDark} />
           </View>
-          <Text style={styles.logoText}>Buddia</Text>
+          <Text style={styles.logoText}>Buddi</Text>
         </View>
         <Pressable onPress={() => {}}>
           <Feather name="settings" size={24} color={buddiColors.textPrimary} />
