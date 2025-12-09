@@ -1,23 +1,55 @@
 import { buddiColors } from '@/constants/theme';
+import type { ChatMessage } from '@/lib/data/mockData';
 import { chatMessages, conversations } from '@/lib/data/mockData';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 export default function ChatScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [message, setMessage] = useState('');
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const scrollViewRef = useRef<ScrollView>(null);
   
   const conversation = id ? conversations.find(c => c.id === id) : null;
-  const messages = id ? (chatMessages[id] || []) : [];
   const chatName = conversation?.name || 'Chat';
   const members = conversation?.members || 1;
 
+  // Initialize messages from mockData
+  useEffect(() => {
+    if (id) {
+      setMessages(chatMessages[id] || []);
+    }
+  }, [id]);
+
+  // Scroll to bottom when new messages are added
+  useEffect(() => {
+    if (scrollViewRef.current) {
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
+  }, [messages]);
+
   const handleSend = () => {
-    if (message.trim()) {
-      // Handle send message
+    if (message.trim() && id) {
+      const newMessage: ChatMessage = {
+        id: `msg-${Date.now()}`,
+        text: message.trim(),
+        timestamp: new Date().toLocaleTimeString('en-US', { 
+          hour: '2-digit', 
+          minute: '2-digit',
+          hour12: false 
+        }),
+        isSent: true,
+      };
+      
+      // Add message to state
+      setMessages(prev => [...prev, newMessage]);
+      
+      // Clear input
       setMessage('');
     }
   };
@@ -61,6 +93,7 @@ export default function ChatScreen() {
 
       {/* Messages Area */}
       <ScrollView 
+        ref={scrollViewRef}
         style={styles.messagesArea}
         contentContainerStyle={styles.messagesContent}
         showsVerticalScrollIndicator={false}
@@ -112,13 +145,15 @@ export default function ChatScreen() {
           value={message}
           onChangeText={setMessage}
           multiline
+          onSubmitEditing={handleSend}
         />
         <Pressable 
           style={[styles.sendButton, message.trim() && styles.sendButtonActive]}
           onPress={handleSend}
+          disabled={!message.trim()}
         >
           <Feather 
-            name="mic" 
+            name={message.trim() ? "send" : "mic"} 
             size={20} 
             color={message.trim() ? buddiColors.textOnDark : buddiColors.textSecondary} 
           />

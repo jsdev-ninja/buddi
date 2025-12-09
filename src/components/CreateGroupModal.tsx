@@ -4,15 +4,15 @@ import { ActivityTypeEnum, createGroupSchema, DifficultyEnum, PrivacyEnum } from
 import { Feather } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
-    Modal,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+	Modal,
+	Platform,
+	Pressable,
+	ScrollView,
+	StyleSheet,
+	Text,
+	TextInput,
+	TouchableOpacity,
+	View,
 } from 'react-native';
 import { z } from 'zod';
 
