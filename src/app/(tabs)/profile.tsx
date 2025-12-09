@@ -1,16 +1,18 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Image } from 'react-native';
-import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Feather } from '@expo/vector-icons';
+import { EditProfileModal } from '@/components/EditProfileModal';
 import { buddiColors } from '@/constants/theme';
 import { Card } from '@/lib/components/Card';
-import { travelerCards } from '@/lib/data/mockData';
+import type { EditProfileInput } from '@/lib/schemas/profile';
+import { Feather } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const [showInterests, setShowInterests] = useState(true);
-  const profile = {
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [profile, setProfile] = useState({
     name: 'Philip',
     age: 32,
     location: 'Ff',
@@ -22,7 +24,7 @@ export default function ProfileScreen() {
     rating: 0,
     interests: ['Teaching', 'Cultural Tours', 'Nightlife'],
     hasAnswers: false,
-  };
+  });
 
   return (
     <View style={styles.container}>
@@ -58,7 +60,7 @@ export default function ProfileScreen() {
             <View style={styles.avatarContainer}>
               <Image source={profile.profilePhoto} style={styles.avatar} />
             </View>
-            <Pressable style={styles.editButton}>
+            <Pressable style={styles.editButton} onPress={() => setShowEditModal(true)}>
               <Feather name="edit" size={18} color={buddiColors.primary} />
             </Pressable>
           </LinearGradient>
@@ -211,6 +213,29 @@ export default function ProfileScreen() {
           </View>
         </Card>
       </ScrollView>
+
+      <EditProfileModal
+        visible={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        onSubmit={(data: EditProfileInput) => {
+          console.log('Profile updated:', data);
+          // Update profile state with new data
+          setProfile((prev) => ({
+            ...prev,
+            ...data,
+            interests: data.interests || prev.interests,
+          }));
+          setShowEditModal(false);
+        }}
+        initialData={{
+          name: profile.name,
+          age: profile.age,
+          location: profile.location,
+          locationFlag: profile.locationFlag,
+          bio: profile.bio,
+          interests: profile.interests,
+        }}
+      />
     </View>
   );
 }
