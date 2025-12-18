@@ -1,7 +1,8 @@
 // Import the functions you need from the SDKs you need
-import ReactNativeAsyncStorage from "@react-native-async-storage/async-storage";
-import * as AuthSession from "expo-auth-session";
-import * as WebBrowser from "expo-web-browser";
+import type { Group } from "@/entities/group";
+import { Profile } from "@/entities/profile";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import { initializeApp } from "firebase/app";
 import {
 	getAuth,
@@ -11,11 +12,17 @@ import {
 	onAuthStateChanged,
 	signInWithCredential,
 	signOut,
-	type User as FirebaseUser,
+	User,
 } from "firebase/auth";
-
-// Complete auth session for expo-auth-session
-WebBrowser.maybeCompleteAuthSession();
+import {
+	addDoc,
+	collection,
+	getDocs,
+	getFirestore,
+	orderBy,
+	query,
+	where
+} from "firebase/firestore";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -31,12 +38,15 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
+// Initialize Firestore
+const db = getFirestore(app);
+
 // Initialize Auth with React Native persistence
 // Check if auth is already initialized to avoid "already-initialized" error
 let auth;
 try {
 	auth = initializeAuth(app, {
-		persistence: getReactNativePersistence(ReactNativeAsyncStorage),
+		persistence: getReactNativePersistence(AsyncStorage),
 	});
 } catch (error: any) {
 	// If auth is already initialized, get the existing instance
@@ -46,16 +56,6 @@ try {
 		throw error;
 	}
 }
-
-const convertFirebaseUser = (user: FirebaseUser | null) => {
-	if (!user) return null;
-	return {
-		uid: user.uid,
-		email: user.email,
-		displayName: user.displayName,
-		photoURL: user.photoURL,
-	};
-};
 
 /**
  * GOOGLE_CLIENT_ID - OAuth 2.0 Client ID for Google Sign-In
@@ -80,99 +80,304 @@ const convertFirebaseUser = (user: FirebaseUser | null) => {
  * 6. Copy the Client ID
  *
  * IMPORTANT:
- * - This is NOT the same as your Firebase API key
- * - It's a Google OAuth client ID that allows your app to authenticate with Google
- * - You need to add the redirect URI to your OAuth client in Google Cloud Console:
- *   - For development: https://auth.expo.io/@your-username/buddia
- *   - For production: buddi:// (your app scheme)
- *
- * SET IT AS ENVIRONMENT VARIABLE:
- * Create a .env file in your project root:
- *   EXPO_PUBLIC_GOOGLE_CLIENT_ID=your-actual-client-id.apps.googleusercontent.com
+ * - For iOS: You need the iOS Client ID (different from Web Client ID)
+ * - For Android: You need the Android Client ID (different from Web Client ID)
+ * - The Web Client ID is used for Firebase authentication
  */
-const GOOGLE_CLIENT_ID = "64676977478-1lq4fnf0khpmhls1qcodbotrpa26md8m.apps.googleusercontent.com";
+const GOOGLE_WEB_CLIENT_ID =
+	"64676977478-1lq4fnf0khpmhls1qcodbotrpa26md8m.apps.googleusercontent.com";
+// iOS Client ID from GoogleService-Info.plist
+const GOOGLE_IOS_CLIENT_ID =
+	"64676977478-isdhiokj3hj0q8p0098q1qnru4dqkau8.apps.googleusercontent.com";
+
+// Configure Google Sign-In
+GoogleSignin.configure({
+	webClientId: GOOGLE_WEB_CLIENT_ID, // From Firebase Console (Web client ID)
+	iosClientId: GOOGLE_IOS_CLIENT_ID, // From GoogleService-Info.plist (iOS client ID)
+	// Android client ID will be read from google-services.json if available
+});
+
+// recursively remove undefined values from an object
+const cleanObject = (obj: any) => {
+	if (typeof obj !== "object" || obj === null) {
+		return obj;
+	}
+	for (const key in obj) {
+		if (obj[key] === undefined) {
+			delete obj[key];
+		}
+		if (typeof obj[key] === "object") {
+			obj[key] = cleanObject(obj[key]);
+		}
+	}
+	return obj;
+};
 
 export const firebaseApi = {
-	auth: {
-		loginWithGoogle: async () => {
-			// Step 1: Use expo-auth-session to get Google ID token
+	profiles: {
+		create: async (profileData: Omit<Profile, "id" | "createdAt" | "updatedAt">) => {
+			try {
+				if (!auth.currentUser) {
+					throw new Error("User must be authenticated to create a profile");
+				}
 
-			let redirectUri = AuthSession.makeRedirectUri({});
-			console.log("🔗 Redirect URI:", redirectUri);
+				const now = Date.now();
 
-			// Log the redirect URI so you can add it to Google Cloud Console
-			console.log("🔗 Redirect URI:", redirectUri);
-			console.log(
-				"📋 Add this exact URI to Google Cloud Console > OAuth 2.0 Client > Authorized redirect URIs"
-			);
+				let firestoreData: any = {
+					...profileData,
+					userId: auth.currentUser.uid,
+				};
 
-			// Use authorization code flow (more compatible with Google OAuth)
-			// Google doesn't support PKCE with ID token response type
-			const request = new AuthSession.AuthRequest({
-				clientId: GOOGLE_CLIENT_ID,
-				scopes: ["openid", "profile", "email"],
-				responseType: AuthSession.ResponseType.Code, // Use code flow instead of id_token
-				redirectUri,
-				usePKCE: true, // PKCE is required for authorization code flow
-			});
+				firestoreData = cleanObject(firestoreData);
 
-			const result = await request.promptAsync({
-				authorizationEndpoint: "https://accounts.google.com/o/oauth2/v2/auth",
-			});
+				firestoreData.createdAt = now;
+				firestoreData.updatedAt = now;
 
-			if (result.type === "success" && result.params.code) {
-				// Step 2: Exchange authorization code for ID token
-				// We need to use the code verifier from the request for PKCE
-				const tokenResponse = await AuthSession.exchangeCodeAsync(
-					{
-						clientId: GOOGLE_CLIENT_ID,
-						code: result.params.code,
-						redirectUri,
-						extraParams: {},
-						codeVerifier: request.codeVerifier, // Required for PKCE
-					},
-					{
-						tokenEndpoint: "https://oauth2.googleapis.com/token",
-					}
+				const docRef = await addDoc(collection(db, "profiles"), firestoreData);
+
+				return {
+					...firestoreData,
+					id: docRef.id,
+					createdAt: now,
+					updatedAt: now,
+				} as Profile;
+			} catch (error) {
+				console.error("Error creating profile:", error);
+				throw error;
+			}
+		},
+		getProfile: async (userId: string): Promise<Profile | null> => {
+			try {
+				if (!userId) {
+					throw new Error("User ID is required to fetch a profile");
+				}
+
+				// Query profile where userId matches (profiles use auto-generated IDs, not userId as doc ID)
+				const q = query(
+					collection(db, "profiles"),
+					where("userId", "==", userId)
 				);
 
-				// Step 3: Build Firebase credential with the Google ID token
-				const idToken = tokenResponse.idToken;
-				if (!idToken) {
+				const querySnapshot = await getDocs(q);
+
+				if (querySnapshot.empty) {
+					return null;
+				}
+
+				// Get the first matching profile (should only be one per user)
+				const docSnapshot = querySnapshot.docs[0];
+				const data = docSnapshot.data();
+
+				return {
+					id: docSnapshot.id,
+					...data,
+				} as Profile;
+			} catch (error) {
+				console.error("Error fetching profile:", error);
+				throw error;
+			}
+		},
+		getDiscoverProfiles: async (excludeUserId: string): Promise<Profile[]> => {
+			try {
+				// Query all profiles except the current user's
+				// Note: Firestore doesn't support != operator directly, so we'll fetch all and filter
+				// For better performance with many profiles, consider using a different approach
+				const q = query(
+					collection(db, "profiles"),
+					where("type", "==", "profile")
+				);
+
+				const querySnapshot = await getDocs(q);
+				const profiles: Profile[] = [];
+
+				querySnapshot.forEach((doc) => {
+					const data = doc.data();
+					const profile = {
+						id: doc.id,
+						...data,
+					} as Profile;
+
+					// Exclude current user's profile
+					if (profile.userId !== excludeUserId) {
+						profiles.push(profile);
+					}
+				});
+
+				// Sort by createdAt if available (newest first)
+				profiles.sort((a, b) => {
+					const aTime = a.createdAt || 0;
+					const bTime = b.createdAt || 0;
+					return bTime - aTime;
+				});
+
+				return profiles;
+			} catch (error) {
+				console.error("Error fetching discover profiles:", error);
+				throw error;
+			}
+		},
+	},
+	auth: {
+		loginWithGoogle: async () => {
+			try {
+				// Check if Google Play Services are available (Android only)
+				await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+
+				// Sign in with Google
+				await GoogleSignin.signIn();
+
+				// Get the ID token after sign-in
+				const tokens = await GoogleSignin.getTokens();
+
+				if (!tokens.idToken) {
 					throw new Error("Failed to get ID token from Google");
 				}
-				const credential = GoogleAuthProvider.credential(idToken);
 
-				// Step 3: Sign in with credential from the Google user
-				try {
-					const userCredential = await signInWithCredential(auth, credential);
-					return convertFirebaseUser(userCredential.user);
-				} catch (error: any) {
-					// Handle Errors here
-					const errorCode = error.code;
-					const errorMessage = error.message;
-					console.error("Firebase sign-in error:", errorCode, errorMessage);
-					throw error;
+				// Create Firebase credential with the Google ID token
+				const credential = GoogleAuthProvider.credential(tokens.idToken);
+
+				// Sign in with Firebase using the credential
+				const userCredential = await signInWithCredential(auth, credential);
+				console.log("userCredential", userCredential.user);
+
+				// check if signup or signin
+				if (userCredential.user.metadata.creationTime) {
+					// signup
+					console.log("signup");
+				} else {
+					// signin
+					console.log("signin");
 				}
+				return {
+					user: userCredential.user,
+					isNewUser: userCredential.user.metadata.creationTime ? true : false,
+				};
+			} catch (error: any) {
+				if (error.code === "SIGN_IN_CANCELLED" || error.code === "10") {
+					throw new Error("Google sign-in cancelled by user");
+				}
+				console.error("Google sign-in error:", error);
+				throw error;
 			}
-
-			// User cancelled or sign-in failed
-			if (result.type === "cancel") {
-				throw new Error("Google sign-in cancelled by user");
-			}
-
-			throw new Error("Google sign-in failed");
 		},
 		signOut: async () => {
+			// Sign out from Firebase
 			await signOut(auth);
+			// Sign out from Google Sign-In
+			await GoogleSignin.signOut();
 		},
 		getCurrentUser: () => {
-			return convertFirebaseUser(auth.currentUser);
+			return auth.currentUser;
 		},
-		onAuthStateChanged: (callback: (user: ReturnType<typeof convertFirebaseUser>) => void) => {
+		onAuthStateChanged: (callback: (user: User | null) => void) => {
 			return onAuthStateChanged(auth, (user) => {
-				callback(convertFirebaseUser(user));
+				callback(user as User | null);
 			});
+		},
+	},
+	groups: {
+		create: async (
+			groupData: Omit<Group, "id" | "createdAt" | "updatedAt" | "startDate" | "endDate"> & {
+				startDate?: string | number;
+				endDate?: string | number;
+			}
+		): Promise<Group> => {
+			try {
+				if (!auth.currentUser) {
+					throw new Error("User must be authenticated to create a group");
+				}
+
+				const now = Date.now();
+
+				// Convert string dates to JavaScript timestamps if provided
+				let firestoreData: any = {
+					...groupData,
+					userId: auth.currentUser.uid,
+				};
+
+				firestoreData = cleanObject(firestoreData);
+
+				// Convert startDate string to timestamp (Date.now()) if provided
+				if (firestoreData.startDate) {
+					if (typeof firestoreData.startDate === "string") {
+						firestoreData.startDate = new Date(firestoreData.startDate).getTime();
+					}
+					// If it's already a number, keep it as is
+				}
+
+				// Convert endDate string to timestamp (Date.now()) if provided
+				if (firestoreData.endDate) {
+					if (typeof firestoreData.endDate === "string") {
+						firestoreData.endDate = new Date(firestoreData.endDate).getTime();
+					}
+					// If it's already a number, keep it as is
+				}
+
+				// Add timestamps using Date.now()
+				firestoreData.createdAt = now;
+				firestoreData.updatedAt = now;
+
+				console.log("firestoreData", firestoreData);
+
+				// Add document to Firestore
+				const docRef = await addDoc(collection(db, "groups"), firestoreData);
+
+				// Return the created group with the document ID
+				return {
+					...firestoreData,
+					id: docRef.id,
+					createdAt: now,
+					updatedAt: now,
+				} as Group;
+			} catch (error) {
+				console.error("Error creating group:", error);
+				throw error;
+			}
+		},
+		getUserGroups: async (userId: string): Promise<Group[]> => {
+			try {
+				if (!userId) {
+					throw new Error("User ID is required to fetch groups");
+				}
+
+				// Query groups where userId matches
+				// Try with orderBy first, fallback to without if index doesn't exist
+				let q;
+				try {
+					q = query(
+						collection(db, "groups"),
+						where("userId", "==", userId),
+						orderBy("createdAt", "desc")
+					);
+				} catch (indexError) {
+					// If index doesn't exist, query without orderBy
+					console.warn("Index not found, querying without orderBy:", indexError);
+					q = query(collection(db, "groups"), where("userId", "==", userId));
+				}
+
+				const querySnapshot = await getDocs(q);
+				const groups: Group[] = [];
+
+				querySnapshot.forEach((doc) => {
+					const data = doc.data();
+					groups.push({
+						id: doc.id,
+						...data,
+					} as Group);
+				});
+
+				// Sort by createdAt if available (client-side fallback)
+				groups.sort((a, b) => {
+					const aTime = a.createdAt || 0;
+					const bTime = b.createdAt || 0;
+					return bTime - aTime; // Descending order (newest first)
+				});
+
+				return groups;
+			} catch (error) {
+				console.error("Error fetching user groups:", error);
+				throw error;
+			}
 		},
 	},
 };

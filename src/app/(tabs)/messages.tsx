@@ -1,16 +1,19 @@
 import { CreateGroupModal } from '@/components/CreateGroupModal';
+import { SettingsDropdown } from '@/components/SettingsDropdown';
 import { buddiColors } from '@/constants/theme';
 import { conversations } from '@/lib/data/mockData';
 import type { CreateGroupInput } from '@/lib/schemas/group';
+import { firebaseApi } from '@/services/firebase';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 export default function MessagesScreen() {
   const router = useRouter();
   const hasConversations = conversations.length > 0;
   const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
 
   return (
     <View style={styles.container}>
@@ -22,10 +25,15 @@ export default function MessagesScreen() {
           </View>
           <Text style={styles.logoText}>Buddia</Text>
         </View>
-        <Pressable onPress={() => {}}>
+        <Pressable onPress={() => setShowSettingsDropdown(true)}>
           <Feather name="settings" size={24} color={buddiColors.textPrimary} />
         </Pressable>
       </View>
+
+      <SettingsDropdown
+        visible={showSettingsDropdown}
+        onClose={() => setShowSettingsDropdown(false)}
+      />
 
       {/* Messages Header */}
       <View style={styles.messagesHeader}>
@@ -90,10 +98,40 @@ export default function MessagesScreen() {
       <CreateGroupModal
         visible={showCreateGroup}
         onClose={() => setShowCreateGroup(false)}
-        onSubmit={(data: CreateGroupInput) => {
-          console.log('Group created:', data);
-          // TODO: Implement group creation API call
-          setShowCreateGroup(false);
+        onSubmit={async (data: CreateGroupInput) => {
+          try {
+            // Convert CreateGroupInput to format for Firestore
+            // Dates will be converted from strings to Timestamp in the create function
+            const groupData = {
+              userId: "", // Will be set by Firestore function from current user
+              groupName: data.groupName,
+              destination: data.destination,
+              description: data.description,
+              activityType: data.activityType,
+              difficulty: data.difficulty,
+              tags: data.tags,
+              privacy: data.privacy,
+              startDate: data.startDate, // String - will be converted to Timestamp
+              endDate: data.endDate, // String - will be converted to Timestamp
+              maxMembers: data.maxMembers,
+              estimatedCost: data.estimatedCost,
+              groupPhoto: data.groupPhoto || null,
+              participants: data.participants,
+            };
+
+            // Create group in Firestore
+            const createdGroup = await firebaseApi.groups.create(groupData);
+            console.log('Group created in Firestore:', createdGroup);
+            
+            setShowCreateGroup(false);
+            Alert.alert('Success', 'Group created successfully!');
+          } catch (error: any) {
+            console.error('Error creating group:', error);
+            Alert.alert(
+              'Error',
+              error.message || 'Failed to create group. Please try again.'
+            );
+          }
         }}
       />
     </View>

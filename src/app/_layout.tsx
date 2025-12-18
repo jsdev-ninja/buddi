@@ -15,6 +15,8 @@ function RootNavigator() {
 	const colorScheme = useColorScheme();
 	const { user } = useAuth();
 
+	console.log("user", user);
+
 	return (
 		<ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
 			<Stack>
@@ -23,12 +25,12 @@ function RootNavigator() {
 				</Stack.Protected>
 
 				<Stack.Protected guard={!user}>
-					<Stack.Screen 
-						name="sign-in" 
-						options={{ 
+					<Stack.Screen
+						name="(auth)/sign-in"
+						options={{
 							headerShown: false,
 							gestureEnabled: false,
-						}} 
+						}}
 					/>
 				</Stack.Protected>
 			</Stack>

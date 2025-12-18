@@ -1,4 +1,5 @@
 import { EditProfileModal } from '@/components/EditProfileModal';
+import { SettingsDropdown } from '@/components/SettingsDropdown';
 import { buddiColors } from '@/constants/theme';
 import { Card } from '@/lib/components/Card';
 import type { EditProfileInput } from '@/lib/schemas/profile';
@@ -12,6 +13,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const [showInterests, setShowInterests] = useState(true);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
   const [profile, setProfile] = useState({
     name: 'Philip',
     age: 32,
@@ -36,10 +38,15 @@ export default function ProfileScreen() {
           </View>
           <Text style={styles.logoText}>Buddia</Text>
         </View>
-        <Pressable onPress={() => {}}>
+        <Pressable onPress={() => setShowSettingsDropdown(true)}>
           <Feather name="settings" size={24} color={buddiColors.textPrimary} />
         </Pressable>
       </View>
+
+      <SettingsDropdown
+        visible={showSettingsDropdown}
+        onClose={() => setShowSettingsDropdown(false)}
+      />
 
       <ScrollView 
         style={styles.scrollView}

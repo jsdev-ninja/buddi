@@ -1,14 +1,16 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
+import { SettingsDropdown } from '@/components/SettingsDropdown';
 import { buddiColors } from '@/constants/theme';
+import { Feather } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 type TabType = 'likesYou' | 'matches';
 
 export default function MatchesScreen() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabType>('likesYou');
+  const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
   const hasLikes = false; // Set to true when there are likes
 
   return (
@@ -21,10 +23,15 @@ export default function MatchesScreen() {
           </View>
           <Text style={styles.logoText}>Buddia</Text>
         </View>
-        <Pressable onPress={() => {}}>
+        <Pressable onPress={() => setShowSettingsDropdown(true)}>
           <Feather name="settings" size={24} color={buddiColors.textPrimary} />
         </Pressable>
       </View>
+
+      <SettingsDropdown
+        visible={showSettingsDropdown}
+        onClose={() => setShowSettingsDropdown(false)}
+      />
 
       {/* Tabs */}
       <View style={styles.tabsContainer}>

@@ -14,6 +14,7 @@ import {
 	TouchableOpacity,
 	View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { z } from 'zod';
 
 interface CreateGroupModalProps {
@@ -41,6 +42,7 @@ const ACTIVITY_TYPES = [
 const DIFFICULTY_LEVELS = ['Easy', 'Moderate', 'Hard', 'Expert'] as const;
 
 export function CreateGroupModal({ visible, onClose, onSubmit }: CreateGroupModalProps) {
+	const insets = useSafeAreaInsets();
 	const [step, setStep] = useState<Step>(1);
 	const [formData, setFormData] = useState<Partial<CreateGroupInput>>({
 		privacy: 'public',
@@ -568,7 +570,7 @@ export function CreateGroupModal({ visible, onClose, onSubmit }: CreateGroupModa
 					</ScrollView>
 
 					{/* Footer Buttons */}
-					<View style={styles.footer}>
+					<View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
 						<Pressable style={styles.cancelButton} onPress={onClose}>
 							<Text style={styles.cancelButtonText}>Cancel</Text>
 						</Pressable>
@@ -926,6 +928,7 @@ const styles = StyleSheet.create({
 		justifyContent: 'space-between',
 		paddingHorizontal: 20,
 		paddingTop: 16,
+		paddingBottom: 0, // Will be set dynamically with safe area insets
 		borderTopWidth: 1,
 		borderTopColor: buddiColors.surfaceBorder,
 		gap: 12,

@@ -10,20 +10,19 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.buddi.buddia",
+      "bundleIdentifier": "com.buddi.travel",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#E6F4FE"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.buddi.travel"
     },
     "web": {
       "output": "static",
@@ -42,6 +41,12 @@
             "backgroundColor": "#000000"
           }
         }
+      ],
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.64676977478-isdhiokj3hj0q8p0098q1qnru4dqkau8"
+        }
       ]
     ],
     "experiments": {
@@ -53,6 +58,7 @@
       "eas": {
         "projectId": "8dc3f5b7-7c90-4cbb-b9ab-da2db3158861"
       }
-    }
+    },
+    "owner": "jsdev-ninja"
   }
 }

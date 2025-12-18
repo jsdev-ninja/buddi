@@ -1,39 +1,24 @@
 import { buddiColors } from "@/constants/theme";
+import { useAuth } from "@/context/AuthProvider";
 import { Feather } from "@expo/vector-icons";
-import { makeRedirectUri, useAuthRequest } from "expo-auth-session";
 import { router } from "expo-router";
+import { useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
-// Endpoint
-
 export default function SignIn() {
-	const [request, response, promptAsync] = useAuthRequest(
-		{
-			clientId: "64676977478-1lq4fnf0khpmhls1qcodbotrpa26md8m.apps.googleusercontent.com",
-			scopes: ["email"],
-			redirectUri: makeRedirectUri({
-				scheme: "your.app",
-			}),
-			// redirectUri: "https://auth.expo.io/philbro/buddia",
-		},
-		{
-			authorizationEndpoint: "https://accounts.google.com/o/oauth2/v2/auth",
-		}
-	);
-
-	console.log("request", request);
-	console.log("response", response);
-	console.log("promptAsync", promptAsync);
+	const { signIn } = useAuth();
+	const [isLoading, setIsLoading] = useState(false);
 
 	const handleSignIn = async () => {
 		try {
-			const result = await promptAsync();
-			console.log("result", result);
-			if (result.type === "success") {
-				router.replace("/(tabs)");
-			}
-		} catch (error) {
+			setIsLoading(true);
+			await signIn();
+			router.replace("/(tabs)");
+		} catch (error: any) {
 			console.error("Sign in failed:", error);
+			// Error is already handled in AuthProvider
+		} finally {
+			setIsLoading(false);
 		}
 	};
 
@@ -46,9 +31,15 @@ export default function SignIn() {
 				<Text style={styles.title}>Welcome to Buddi</Text>
 				<Text style={styles.subtitle}>Connect with adventure buddies</Text>
 
-				<TouchableOpacity style={styles.button} onPress={handleSignIn}>
+				<TouchableOpacity 
+					style={[styles.button, isLoading && styles.buttonDisabled]} 
+					onPress={handleSignIn}
+					disabled={isLoading}
+				>
 					<Feather name="log-in" size={20} color="#fff" style={styles.buttonIcon} />
-					<Text style={styles.buttonText}>Sign in with Google</Text>
+					<Text style={styles.buttonText}>
+						{isLoading ? "Signing in..." : "Sign in with Google"}
+					</Text>
 				</TouchableOpacity>
 			</View>
 		</View>

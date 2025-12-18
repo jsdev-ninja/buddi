@@ -1,15 +1,7 @@
-import type { User } from '@/lib/atoms/user';
-import { authLoadingAtom, storage, userAtom } from '@/lib/atoms/user';
-import { Provider, useAtom, useSetAtom } from 'jotai';
-import { useEffect } from 'react';
-
-// Mock user for development
-const MOCK_USER: User = {
-	uid: 'mock-user-123',
-	email: 'mock.user@example.com',
-	displayName: 'Mock User',
-	photoURL: null,
-};
+import { authLoadingAtom, storage, userAtom } from "@/lib/atoms/user";
+import { firebaseApi } from "@/services/firebase";
+import { Provider, useAtom, useSetAtom } from "jotai";
+import { useEffect } from "react";
 
 // Hook to use authentication
 export function useAuth() {
@@ -21,12 +13,28 @@ export function useAuth() {
 	const signIn = async () => {
 		try {
 			setLoadingAtom(true);
-			// Use mock user instead of Firebase auth
-			setUserAtom(MOCK_USER);
-			// Persist to storage
-			await storage.setItem('user', JSON.stringify(MOCK_USER));
+			// Use real Firebase Google sign-in
+			const { user: firebaseUser, isNewUser } = await firebaseApi.auth.loginWithGoogle();
+			console.log("isNewUser", isNewUser);
+			if (firebaseUser) {
+				setUserAtom(firebaseUser);
+				// Persist to storage
+				await storage.setItem("user", JSON.stringify(firebaseUser));
+
+				// Create empty profile if user doesn't have one
+				try {
+					const existingProfile = await firebaseApi.profiles.getProfile(firebaseUser.uid);
+					if (!existingProfile) {
+						console.log("Creating empty profile for new user");
+						await firebaseApi.profiles.create();
+					}
+				} catch (profileError) {
+					console.error("Error checking/creating profile:", profileError);
+					// Don't throw - profile creation failure shouldn't block sign-in
+				}
+			}
 		} catch (error) {
-			console.error('Sign in error:', error);
+			console.error("Sign in error:", error);
 			throw error;
 		} finally {
 			setLoadingAtom(false);
@@ -36,12 +44,14 @@ export function useAuth() {
 	const signOut = async () => {
 		try {
 			setLoadingAtom(true);
-			// Clear user (for testing purposes)
+			// Use real Firebase sign out
+			await firebaseApi.auth.signOut();
+			// Clear user
 			setUserAtom(null);
 			// Remove from storage
-			await storage.removeItem('user');
+			await storage.removeItem("user");
 		} catch (error) {
-			console.error('Sign out error:', error);
+			console.error("Sign out error:", error);
 			throw error;
 		} finally {
 			setLoadingAtom(false);
@@ -64,25 +74,46 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
 	useEffect(() => {
 		let mounted = true;
 
-		const initializeAuth = async () => {
-			// Set initial loading state
-			setIsLoading(true);
+		// Set initial loading state
+		setIsLoading(true);
 
-			// Use mock user instead of Firebase auth
-			if (mounted) {
-				setUser(MOCK_USER);
+		// Set up Firebase auth state listener
+		const unsubscribe = firebaseApi.auth.onAuthStateChanged(async (firebaseUser) => {
+			if (!mounted) return;
+
+			console.log("firebaseUser", firebaseUser);
+
+			if (firebaseUser) {
+				setUser(firebaseUser);
 				// Sync to storage
-				await storage.setItem('user', JSON.stringify(MOCK_USER)).catch(() => {
+				storage.setItem("user", JSON.stringify(firebaseUser)).catch(() => {
 					// Ignore errors
 				});
-				setIsLoading(false);
-			}
-		};
 
-		initializeAuth();
+				// Create empty profile if user doesn't have one
+				try {
+					const existingProfile = await firebaseApi.profiles.getProfile(firebaseUser.uid);
+					if (!existingProfile) {
+						console.log("Creating empty profile for user");
+						await firebaseApi.profiles.create();
+					}
+				} catch (profileError) {
+					console.error("Error checking/creating profile:", profileError);
+					// Don't throw - profile creation failure shouldn't block auth state
+				}
+			} else {
+				setUser(null);
+				// Remove from storage
+				storage.removeItem("user").catch(() => {
+					// Ignore errors
+				});
+			}
+			setIsLoading(false);
+		});
 
 		return () => {
 			mounted = false;
+			unsubscribe();
 		};
 	}, [setUser, setIsLoading]);
 

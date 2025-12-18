@@ -1,23 +1,82 @@
 import { CreateGroupModal } from '@/components/CreateGroupModal';
+import { SettingsDropdown } from '@/components/SettingsDropdown';
 import { buddiColors } from '@/constants/theme';
-import { completedGroupsAtom, createGroupFromInput, userGroupsAtom } from '@/lib/atoms/groups';
+import { useAuth } from '@/context/AuthProvider';
+import type { Group } from '@/entities/group';
+import { completedGroupsAtom, userGroupsAtom } from '@/lib/atoms/groups';
 import { Card } from '@/lib/components/Card';
 import { trendingAdventures } from '@/lib/data/mockData';
 import type { CreateGroupInput } from '@/lib/schemas/group';
+import { firebaseApi } from '@/services/firebase';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAtom } from 'jotai';
-import React, { useState } from 'react';
-import { ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Alert, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 type TabType = 'adventure' | 'myGroups' | 'completed';
 
 export default function AdventuresScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('adventure');
   const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
   const [userGroups, setUserGroups] = useAtom(userGroupsAtom);
   const [completedGroups] = useAtom(completedGroupsAtom);
+  const [isLoadingGroups, setIsLoadingGroups] = useState(false);
+
+  // Fetch user groups from Firestore
+  useEffect(() => {
+    const fetchUserGroups = async () => {
+      if (!user?.uid) {
+        setUserGroups([]);
+        return;
+      }
+
+      try {
+        setIsLoadingGroups(true);
+        const groups = await firebaseApi.groups.getUserGroups(user.uid);
+        
+        // Convert Firestore Group to AdventureGroup format for display
+        const convertedGroups = groups.map((group: Group) => {
+          // Format dates - handle both number timestamps and date strings
+          const formatDate = (date?: number | string) => {
+            if (!date) return '';
+            if (typeof date === 'number') {
+              return new Date(date).toLocaleDateString();
+            }
+            return new Date(date).toLocaleDateString();
+          };
+
+          return {
+            id: group.id,
+            name: group.groupName || 'Unnamed Group',
+            destination: group.destination || 'TBA',
+            description: group.description || '',
+            coverPhoto: group.groupPhoto 
+              ? { uri: group.groupPhoto } 
+              : require('@/assets/images/react-logo.png'), // Default photo
+            startDate: formatDate(group.startDate),
+            endDate: formatDate(group.endDate),
+            currentMembers: (group.participants?.length || 0) + 1, // +1 for creator
+            maxMembers: group.maxMembers || 10,
+            tags: group.tags || [],
+            activityType: group.activityType || 'Other',
+          };
+        });
+
+        setUserGroups(convertedGroups);
+      } catch (error) {
+        console.error('Error fetching user groups:', error);
+        Alert.alert('Error', 'Failed to load your groups. Please try again.');
+      } finally {
+        setIsLoadingGroups(false);
+      }
+    };
+
+    fetchUserGroups();
+  }, [user?.uid, setUserGroups]);
 
   return (
     <View style={styles.container}>
@@ -29,10 +88,15 @@ export default function AdventuresScreen() {
           </View>
           <Text style={styles.logoText}>Buddi</Text>
         </View>
-        <Pressable onPress={() => {}}>
+        <Pressable onPress={() => setShowSettingsDropdown(true)}>
           <Feather name="settings" size={24} color={buddiColors.textPrimary} />
         </Pressable>
       </View>
+
+      <SettingsDropdown
+        visible={showSettingsDropdown}
+        onClose={() => setShowSettingsDropdown(false)}
+      />
 
       <ScrollView 
         style={styles.scrollView}
@@ -146,7 +210,13 @@ export default function AdventuresScreen() {
               <Text style={styles.sectionTitle}>My Groups ({userGroups.length})</Text>
             </View>
 
-            {userGroups.length === 0 ? (
+            {isLoadingGroups ? (
+              <Card style={styles.emptyCard}>
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyTitle}>Loading groups...</Text>
+                </View>
+              </Card>
+            ) : userGroups.length === 0 ? (
               <Card style={styles.emptyCard}>
                 <View style={styles.emptyState}>
                   <Feather name="users" size={48} color={buddiColors.surfaceBorder} />
@@ -281,14 +351,74 @@ export default function AdventuresScreen() {
       <CreateGroupModal
         visible={showCreateGroup}
         onClose={() => setShowCreateGroup(false)}
-        onSubmit={(data: CreateGroupInput) => {
-          console.log('Group created:', data);
-          // Convert to AdventureGroup and add to user groups
-          const newGroup = createGroupFromInput(data);
-          setUserGroups((prev) => [...prev, newGroup]);
-          setShowCreateGroup(false);
-          // Switch to My Groups tab to see the newly created group
-          setActiveTab('myGroups');
+        onSubmit={async (data: CreateGroupInput) => {
+          try {
+            // Convert CreateGroupInput to format for Firestore
+            // Dates will be converted from strings to Timestamp in the create function
+            const groupData = {
+              userId: "", // Will be set by Firestore function from current user
+              groupName: data.groupName,
+              destination: data.destination,
+              description: data.description,
+              activityType: data.activityType,
+              difficulty: data.difficulty,
+              tags: data.tags,
+              privacy: data.privacy,
+              startDate: data.startDate, // String - will be converted to Timestamp
+              endDate: data.endDate, // String - will be converted to Timestamp
+              maxMembers: data.maxMembers,
+              estimatedCost: data.estimatedCost,
+              groupPhoto: data.groupPhoto || null,
+              participants: data.participants,
+            };
+
+            // Create group in Firestore
+            const createdGroup = await firebaseApi.groups.create(groupData);
+            console.log('Group created in Firestore:', createdGroup);
+
+            // Refresh groups from Firestore to show the new group
+            if (user?.uid) {
+              const groups = await firebaseApi.groups.getUserGroups(user.uid);
+              
+              // Format dates - handle both number timestamps and date strings
+              const formatDate = (date?: number | string) => {
+                if (!date) return '';
+                if (typeof date === 'number') {
+                  return new Date(date).toLocaleDateString();
+                }
+                return new Date(date).toLocaleDateString();
+              };
+
+              const convertedGroups = groups.map((group: Group) => ({
+                id: group.id,
+                name: group.groupName || 'Unnamed Group',
+                destination: group.destination || 'TBA',
+                description: group.description || '',
+                coverPhoto: group.groupPhoto 
+                  ? { uri: group.groupPhoto } 
+                  : require('@/assets/images/react-logo.png'),
+                startDate: formatDate(group.startDate),
+                endDate: formatDate(group.endDate),
+                currentMembers: (group.participants?.length || 0) + 1,
+                maxMembers: group.maxMembers || 10,
+                tags: group.tags || [],
+                activityType: group.activityType || 'Other',
+              }));
+              setUserGroups(convertedGroups);
+            }
+            
+            setShowCreateGroup(false);
+            // Switch to My Groups tab to see the newly created group
+            setActiveTab('myGroups');
+            
+            Alert.alert('Success', 'Group created successfully!');
+          } catch (error: any) {
+            console.error('Error creating group:', error);
+            Alert.alert(
+              'Error',
+              error.message || 'Failed to create group. Please try again.'
+            );
+          }
         }}
       />
     </View>

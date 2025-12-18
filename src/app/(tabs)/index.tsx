@@ -1,32 +1,93 @@
+import { SettingsDropdown } from '@/components/SettingsDropdown';
+import { SwipeableCard } from '@/components/SwipeableCard';
 import { buddiColors } from '@/constants/theme';
+import { useAuth } from '@/context/AuthProvider';
+import type { Profile } from '@/entities/profile';
 import { Card } from '@/lib/components/Card';
-import { groups, travelerCards } from '@/lib/data/mockData';
+import type { TravelerProfile } from '@/lib/data/mockData';
+import { firebaseApi } from '@/services/firebase';
 import { Feather } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
-import { ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Alert, ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
 
 type CombinedCard =
-  | { type: 'traveler'; data: typeof travelerCards[number] }
-  | { type: 'group'; data: typeof groups[number] };
+  | { type: 'traveler'; data: TravelerProfile };
 
 export default function DiscoverScreen() {
-  const router = useRouter();
+  const { user } = useAuth();
   const [index, setIndex] = useState(0);
+  const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
+  const [profiles, setProfiles] = useState<TravelerProfile[]>([]);
+  const [isLoadingProfiles, setIsLoadingProfiles] = useState(true);
+
+  // Fetch profiles from Firestore
+  useEffect(() => {
+    const fetchProfiles = async () => {
+      if (!user?.uid) {
+        setProfiles([]);
+        setIsLoadingProfiles(false);
+        return;
+      }
+
+      try {
+        setIsLoadingProfiles(true);
+        const firestoreProfiles = await firebaseApi.profiles.getDiscoverProfiles(user.uid);
+
+        // Convert Profile to TravelerProfile format
+        const convertedProfiles: TravelerProfile[] = firestoreProfiles.map((profile: Profile) => ({
+          id: profile.id,
+          name: profile.name || 'Unknown',
+          age: profile.age || 0,
+          location: profile.location || '',
+          locationFlag: profile.locationFlag || undefined,
+          bio: profile.bio || '',
+          profilePhoto: profile.profilePhoto
+            ? { uri: profile.profilePhoto }
+            : require('@/assets/images/react-logo.png'), // Default photo
+          verified: profile.verified || false,
+          interests: profile.interests || [],
+          adventurePlan: profile.adventurePlan || undefined,
+        }));
+
+        setProfiles(convertedProfiles);
+      } catch (error) {
+        console.error('Error fetching profiles:', error);
+        Alert.alert('Error', 'Failed to load profiles. Please try again.');
+      } finally {
+        setIsLoadingProfiles(false);
+      }
+    };
+
+    fetchProfiles();
+  }, [user?.uid]);
 
   const cards = useMemo<CombinedCard[]>(() => {
-    const travelers = travelerCards.map((data) => ({ type: 'traveler' as const, data }));
-    const adventureCards = groups.map((data) => ({ type: 'group' as const, data }));
-    return [...travelers, ...adventureCards];
-  }, []);
+    const travelers = profiles.map((data) => ({ type: 'traveler' as const, data }));
+    return travelers;
+  }, [profiles]);
 
   const current = cards[index];
 
+  const handleLike = () => {
+    // Handle like action (swipe right)
+    console.log('Liked profile:', current?.data.id);
+    // TODO: Save like to Firestore
+    moveToNextCard();
+  };
+
   const handlePass = () => {
+    // Handle pass action (swipe left)
+    console.log('Passed profile:', current?.data.id);
+    // TODO: Save pass/dislike to Firestore
+    moveToNextCard();
+  };
+
+  const moveToNextCard = () => {
     if (index < cards.length - 1) {
       setIndex((prev) => prev + 1);
     } else {
-      setIndex(0); // Loop back to start
+      // No more cards, show empty state or loop back
+      setIndex(0);
     }
   };
 
@@ -53,64 +114,76 @@ export default function DiscoverScreen() {
           <Pressable onPress={() => {}} style={[styles.iconButton, styles.filterButton]}>
             <Feather name="filter" size={20} color={buddiColors.textOnDark} />
           </Pressable>
+          <Pressable onPress={() => setShowSettingsDropdown(true)} style={styles.iconButton}>
+            <Feather name="settings" size={20} color={buddiColors.textPrimary} />
+          </Pressable>
         </View>
       </View>
 
+      <SettingsDropdown
+        visible={showSettingsDropdown}
+        onClose={() => setShowSettingsDropdown(false)}
+      />
+
       {/* Main Card */}
-      <ScrollView 
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {current && (
-          <Card style={styles.mainCard}>
-            <ImageBackground
-              source={current.type === 'traveler' ? current.data.profilePhoto : current.data.coverPhoto}
-              resizeMode="cover"
-              style={styles.cardImage}
-            >
-              <View style={styles.imageOverlay}>
-                {/* Profile Info Overlay */}
-                {current.type === 'traveler' && (
+      <View style={styles.cardContainer}>
+        {isLoadingProfiles ? (
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>Loading profiles...</Text>
+          </View>
+        ) : cards.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No profiles to discover</Text>
+          </View>
+        ) : current ? (
+          <SwipeableCard
+            key={current.data.id}
+            cardKey={current.data.id}
+            onSwipeRight={handleLike}
+            onSwipeLeft={handlePass}
+            onSwipeComplete={moveToNextCard}
+          >
+            <Card style={styles.mainCard}>
+              <ImageBackground
+                source={current.data.profilePhoto}
+                resizeMode="cover"
+                style={styles.cardImage}
+              >
+                <View style={styles.imageOverlay}>
+                  {/* Profile Info Overlay */}
                   <View style={styles.profileOverlay}>
                     <Text style={styles.profileName}>
-                      {current.data.name}, {current.data.age}
+                      {current.data.name}{current.data.age > 0 ? `, ${current.data.age}` : ''}
                     </Text>
-                    <View style={styles.locationRow}>
-                      <Feather name="map-pin" size={14} color={buddiColors.textOnDark} />
-                      <Text style={styles.locationText}>{current.data.location}</Text>
-                      {current.data.locationFlag && (
-                        <Text style={styles.flag}>{current.data.locationFlag}</Text>
-                      )}
-                    </View>
+                    {current.data.location && (
+                      <View style={styles.locationRow}>
+                        <Feather name="map-pin" size={14} color={buddiColors.textOnDark} />
+                        <Text style={styles.locationText}>{current.data.location}</Text>
+                        {current.data.locationFlag && (
+                          <Text style={styles.flag}>{current.data.locationFlag}</Text>
+                        )}
+                      </View>
+                    )}
+                  </View>
+                </View>
+              </ImageBackground>
+
+              {/* Content Section */}
+              <View style={styles.contentSection}>
+                {current.data.bio && (
+                  <Text style={styles.bioText}>{current.data.bio}</Text>
+                )}
+                {current.data.adventurePlan && (
+                  <View style={styles.adventurePlanSection}>
+                    <Feather name="clipboard" size={18} color={buddiColors.primary} />
+                    <Text style={styles.adventurePlanText}>{current.data.adventurePlan}</Text>
                   </View>
                 )}
               </View>
-            </ImageBackground>
-
-            {/* Content Section */}
-            <View style={styles.contentSection}>
-              {current.type === 'traveler' && (
-                <>
-                  <Text style={styles.bioText}>{current.data.bio}</Text>
-                  {current.data.adventurePlan && (
-                    <View style={styles.adventurePlanSection}>
-                      <Feather name="clipboard" size={18} color={buddiColors.primary} />
-                      <Text style={styles.adventurePlanText}>{current.data.adventurePlan}</Text>
-                    </View>
-                  )}
-                </>
-              )}
-              {current.type === 'group' && (
-                <>
-                  <Text style={styles.groupName}>{current.data.name}</Text>
-                  <Text style={styles.groupDescription}>{current.data.description}</Text>
-                </>
-              )}
-            </View>
-          </Card>
-        )}
-      </ScrollView>
+            </Card>
+          </SwipeableCard>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -162,12 +235,12 @@ const styles = StyleSheet.create({
   filterButton: {
     backgroundColor: buddiColors.primary,
   },
-  scrollView: {
+  cardContainer: {
     flex: 1,
-  },
-  scrollContent: {
     padding: 20,
     paddingTop: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   mainCard: {
     width: '100%',
@@ -245,6 +318,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: buddiColors.textSecondary,
     lineHeight: 24,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: buddiColors.textSecondary,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: buddiColors.textSecondary,
   },
 });
 
