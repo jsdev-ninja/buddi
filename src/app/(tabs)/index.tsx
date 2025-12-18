@@ -67,6 +67,7 @@ export default function DiscoverScreen() {
   }, [profiles]);
 
   const current = cards[index];
+  const isLastCard = index === cards.length - 1;
 
   const handleLike = () => {
     // Handle like action (swipe right)
@@ -85,10 +86,12 @@ export default function DiscoverScreen() {
   const moveToNextCard = () => {
     if (index < cards.length - 1) {
       setIndex((prev) => prev + 1);
-    } else {
-      // No more cards, show empty state or loop back
-      setIndex(0);
     }
+    // Don't auto-loop - let user choose to go back to start
+  };
+
+  const handleBackToStart = () => {
+    setIndex(0);
   };
 
   const handleUndo = () => {
@@ -183,6 +186,17 @@ export default function DiscoverScreen() {
             </Card>
           </SwipeableCard>
         ) : null}
+
+        {/* Show "Back to Start" option when on last card */}
+        {!isLoadingProfiles && cards.length > 0 && isLastCard && (
+          <View style={styles.backToStartContainer}>
+            <Text style={styles.backToStartText}>You&apos;ve seen all profiles!</Text>
+            <Pressable style={styles.backToStartButton} onPress={handleBackToStart}>
+              <Feather name="refresh-cw" size={18} color={buddiColors.textOnDark} />
+              <Text style={styles.backToStartButtonText}>Back to Start</Text>
+            </Pressable>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -338,6 +352,30 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     color: buddiColors.textSecondary,
+  },
+  backToStartContainer: {
+    marginTop: 24,
+    alignItems: 'center',
+    gap: 12,
+  },
+  backToStartText: {
+    fontSize: 16,
+    color: buddiColors.textSecondary,
+    textAlign: 'center',
+  },
+  backToStartButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+    backgroundColor: buddiColors.primary,
+  },
+  backToStartButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: buddiColors.textOnDark,
   },
 });
 
