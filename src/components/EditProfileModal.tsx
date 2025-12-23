@@ -1,26 +1,26 @@
 import { buddiColors } from '@/constants/theme';
-import type { EditProfileInput } from '@/lib/schemas/profile';
-import { editProfileSchema } from '@/lib/schemas/profile';
+import type { ProfileInput } from '@/entities/profile';
+import { profileInputSchema } from '@/entities/profile';
 import { Feather } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
-    Modal,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+	Modal,
+	Platform,
+	Pressable,
+	ScrollView,
+	StyleSheet,
+	Text,
+	TextInput,
+	TouchableOpacity,
+	View,
 } from 'react-native';
 import { z } from 'zod';
 
 interface EditProfileModalProps {
 	visible: boolean;
 	onClose: () => void;
-	onSubmit: (data: EditProfileInput) => void;
-	initialData?: Partial<EditProfileInput>;
+	onSubmit: (data: ProfileInput) => void;
+	initialData?: Partial<ProfileInput>;
 }
 
 const COMMON_INTERESTS = [
@@ -46,7 +46,7 @@ const COMMON_INTERESTS = [
 ] as const;
 
 export function EditProfileModal({ visible, onClose, onSubmit, initialData }: EditProfileModalProps) {
-	const [formData, setFormData] = useState<Partial<EditProfileInput>>({
+	const [formData, setFormData] = useState<Partial<ProfileInput>>({
 		interests: [],
 		...initialData,
 	});
@@ -62,7 +62,7 @@ export function EditProfileModal({ visible, onClose, onSubmit, initialData }: Ed
 		}
 	}, [visible, initialData]);
 
-	const updateField = (field: keyof EditProfileInput, value: any) => {
+	const updateField = (field: keyof ProfileInput, value: any) => {
 		setFormData((prev) => ({ ...prev, [field]: value }));
 		setErrors((prev) => ({ ...prev, [field]: '' }));
 	};
@@ -73,7 +73,7 @@ export function EditProfileModal({ visible, onClose, onSubmit, initialData }: Ed
 				...formData,
 				interests: formData.interests || [],
 			};
-			const validated = editProfileSchema.parse(dataToValidate);
+			const validated = profileInputSchema.parse(dataToValidate);
 			onSubmit(validated);
 			setErrors({});
 			onClose();

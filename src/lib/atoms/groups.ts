@@ -1,5 +1,5 @@
+import type { GroupInput } from '@/entities/group';
 import type { AdventureGroup } from '@/lib/data/mockData';
-import type { CreateGroupInput } from '@/lib/schemas/group';
 import { atom } from 'jotai';
 
 // User's created groups atom
@@ -8,8 +8,8 @@ export const userGroupsAtom = atom<AdventureGroup[]>([]);
 // Completed groups atom
 export const completedGroupsAtom = atom<AdventureGroup[]>([]);
 
-// Helper to convert CreateGroupInput to AdventureGroup
-export function createGroupFromInput(input: CreateGroupInput): AdventureGroup {
+// Helper to convert GroupInput to AdventureGroup
+export function createGroupFromInput(input: GroupInput): AdventureGroup {
 	return {
 		id: `group-${Date.now()}`,
 		name: input.groupName || 'Unnamed Group',

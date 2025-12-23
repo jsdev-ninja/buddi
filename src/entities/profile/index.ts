@@ -22,6 +22,19 @@ export const profileSchema = z.object({
 });
 
 export type Profile = z.infer<typeof profileSchema>;
+
+// Profile input schema for forms (without id, userId, type, timestamps)
+export const profileInputSchema = profileSchema.omit({
+	id: true,
+	userId: true,
+	type: true,
+	createdAt: true,
+	updatedAt: true,
+	verified: true, // Verified is set by admin, not user input
+});
+
+export type ProfileInput = z.infer<typeof profileInputSchema>;
+
 export function isProfile(data: any): data is Profile {
 	return data?.type === "profile";
 }

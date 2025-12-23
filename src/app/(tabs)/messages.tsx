@@ -1,8 +1,8 @@
 import { CreateGroupModal } from '@/components/CreateGroupModal';
 import { SettingsDropdown } from '@/components/SettingsDropdown';
 import { buddiColors } from '@/constants/theme';
+import type { GroupInput } from '@/entities/group';
 import { conversations } from '@/lib/data/mockData';
-import type { CreateGroupInput } from '@/lib/schemas/group';
 import { firebaseApi } from '@/services/firebase';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -98,9 +98,9 @@ export default function MessagesScreen() {
       <CreateGroupModal
         visible={showCreateGroup}
         onClose={() => setShowCreateGroup(false)}
-        onSubmit={async (data: CreateGroupInput) => {
+        onSubmit={async (data: GroupInput) => {
           try {
-            // Convert CreateGroupInput to format for Firestore
+            // Convert GroupInput to format for Firestore
             // Dates will be converted from strings to Timestamp in the create function
             const groupData = {
               userId: "", // Will be set by Firestore function from current user

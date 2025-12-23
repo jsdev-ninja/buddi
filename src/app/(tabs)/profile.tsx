@@ -1,8 +1,8 @@
 import { EditProfileModal } from '@/components/EditProfileModal';
 import { SettingsDropdown } from '@/components/SettingsDropdown';
 import { buddiColors } from '@/constants/theme';
+import type { ProfileInput } from '@/entities/profile';
 import { Card } from '@/lib/components/Card';
-import type { EditProfileInput } from '@/lib/schemas/profile';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -224,7 +224,7 @@ export default function ProfileScreen() {
       <EditProfileModal
         visible={showEditModal}
         onClose={() => setShowEditModal(false)}
-        onSubmit={(data: EditProfileInput) => {
+        onSubmit={(data: ProfileInput) => {
           console.log('Profile updated:', data);
           // Update profile state with new data
           setProfile((prev) => ({

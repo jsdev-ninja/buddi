@@ -1,6 +1,6 @@
 import { buddiColors } from '@/constants/theme';
-import type { CreateGroupInput } from '@/lib/schemas/group';
-import { ActivityTypeEnum, createGroupSchema, DifficultyEnum, PrivacyEnum } from '@/lib/schemas/group';
+import type { GroupInput } from '@/entities/group';
+import { ActivityTypeEnum, DifficultyEnum, groupInputSchema, PrivacyEnum } from '@/entities/group';
 import { Feather } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
@@ -20,7 +20,7 @@ import { z } from 'zod';
 interface CreateGroupModalProps {
 	visible: boolean;
 	onClose: () => void;
-	onSubmit: (data: CreateGroupInput) => void;
+	onSubmit: (data: GroupInput) => void;
 }
 
 type Step = 1 | 2 | 3;
@@ -44,7 +44,7 @@ const DIFFICULTY_LEVELS = ['Easy', 'Moderate', 'Hard', 'Expert'] as const;
 export function CreateGroupModal({ visible, onClose, onSubmit }: CreateGroupModalProps) {
 	const insets = useSafeAreaInsets();
 	const [step, setStep] = useState<Step>(1);
-	const [formData, setFormData] = useState<Partial<CreateGroupInput>>({
+	const [formData, setFormData] = useState<Partial<GroupInput>>({
 		privacy: 'public',
 		tags: [],
 		participants: [],
@@ -68,7 +68,7 @@ export function CreateGroupModal({ visible, onClose, onSubmit }: CreateGroupModa
 		}
 	}, [visible]);
 
-	const updateField = (field: keyof CreateGroupInput, value: any) => {
+	const updateField = (field: keyof GroupInput, value: any) => {
 		setFormData((prev) => ({ ...prev, [field]: value }));
 		setErrors((prev) => ({ ...prev, [field]: '' }));
 	};
@@ -157,7 +157,7 @@ export function CreateGroupModal({ visible, onClose, onSubmit }: CreateGroupModa
 				privacy: formData.privacy || 'public',
 				maxMembers: formData.maxMembers || 10,
 			};
-			const validated = createGroupSchema.parse(dataToValidate);
+			const validated = groupInputSchema.parse(dataToValidate);
 			onSubmit(validated);
 			// Reset form
 			setStep(1);
