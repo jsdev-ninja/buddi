@@ -17,10 +17,12 @@ import {
 import {
 	addDoc,
 	collection,
+	doc,
 	getDocs,
 	getFirestore,
 	orderBy,
 	query,
+	updateDoc,
 	where
 } from "firebase/firestore";
 
@@ -174,6 +176,45 @@ export const firebaseApi = {
 				} as Profile;
 			} catch (error) {
 				console.error("Error fetching profile:", error);
+				throw error;
+			}
+		},
+		update: async (profileId: string, profileData: Partial<ProfileInput>): Promise<Profile> => {
+			try {
+				if (!auth.currentUser) {
+					throw new Error("User must be authenticated to update a profile");
+				}
+
+				if (!profileId) {
+					throw new Error("Profile ID is required to update a profile");
+				}
+
+				const now = Date.now();
+
+				// Prepare update data (exclude id, userId, type, createdAt, verified)
+				let updateData: any = {
+					...profileData,
+					updatedAt: now,
+				};
+
+				// Clean undefined values
+				updateData = cleanObject(updateData);
+
+				// Get the profile document reference
+				const profileRef = doc(db, "profiles", profileId);
+
+				// Update the document
+				await updateDoc(profileRef, updateData);
+
+				// Fetch and return the updated profile
+				const updatedProfile = await firebaseApi.profiles.getProfile(auth.currentUser.uid);
+				if (!updatedProfile) {
+					throw new Error("Profile not found after update");
+				}
+
+				return updatedProfile;
+			} catch (error) {
+				console.error("Error updating profile:", error);
 				throw error;
 			}
 		},

@@ -2,31 +2,86 @@ import { EditProfileModal } from '@/components/EditProfileModal';
 import { SettingsDropdown } from '@/components/SettingsDropdown';
 import { buddiColors } from '@/constants/theme';
 import type { ProfileInput } from '@/entities/profile';
+import { useAuth } from '@/context/AuthProvider';
 import { Card } from '@/lib/components/Card';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { firebaseApi } from '@/services/firebase';
+import type { Profile } from '@/entities/profile';
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const [showInterests, setShowInterests] = useState(true);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
-  const [profile, setProfile] = useState({
-    name: 'Philip',
-    age: 32,
-    location: 'Ff',
-    locationFlag: '🇬🇧',
-    bio: 'Ggg',
+  const [isLoading, setIsLoading] = useState(true);
+  const [profile, setProfile] = useState<Profile & {
+    profilePhoto: any;
+    level: string;
+    rating: number;
+    hasAnswers: boolean;
+  }>({
+    name: undefined,
+    age: undefined,
+    location: undefined,
+    locationFlag: undefined,
+    bio: undefined,
     profilePhoto: require('@/assets/images/react-logo.png'),
-    verified: true,
+    verified: false,
     level: 'beginner',
     rating: 0,
-    interests: ['Teaching', 'Cultural Tours', 'Nightlife'],
+    interests: [],
     hasAnswers: false,
+    type: 'profile',
+    id: '',
+    userId: '',
   });
+
+  // Fetch profile from Firestore on mount
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!user?.uid) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        const firestoreProfile = await firebaseApi.profiles.getProfile(user.uid);
+        
+        if (firestoreProfile) {
+          setProfile((prev) => ({
+            ...prev,
+            ...firestoreProfile,
+            profilePhoto: firestoreProfile.profilePhoto 
+              ? { uri: firestoreProfile.profilePhoto } 
+              : require('@/assets/images/react-logo.png'),
+            level: prev.level, // Keep UI-only fields
+            rating: prev.rating,
+            hasAnswers: prev.hasAnswers,
+          }));
+        }
+      } catch (error) {
+        console.error('Error fetching profile:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchProfile();
+  }, [user?.uid]);
+
+  if (isLoading) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color={buddiColors.primary} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -75,12 +130,12 @@ export default function ProfileScreen() {
           {/* Profile Info */}
           <View style={styles.profileInfo}>
             <View style={styles.nameRow}>
-              <Text style={styles.name}>{profile.name}</Text>
-              <Text style={styles.age}>{profile.age}</Text>
+              <Text style={styles.name}>{profile.name || 'No name'}</Text>
+              {profile.age && <Text style={styles.age}>{profile.age}</Text>}
             </View>
             <View style={styles.locationRow}>
               <Feather name="map-pin" size={16} color={buddiColors.textSecondary} />
-              <Text style={styles.location}>{profile.location}</Text>
+              <Text style={styles.location}>{profile.location || 'No location'}</Text>
               {profile.locationFlag && (
                 <Text style={styles.flag}>{profile.locationFlag}</Text>
               )}
@@ -108,7 +163,7 @@ export default function ProfileScreen() {
         {/* About Me Section */}
         <Card style={styles.section}>
           <Text style={styles.sectionTitle}>About Me</Text>
-          <Text style={styles.bioText}>{profile.bio}</Text>
+          <Text style={styles.bioText}>{profile.bio || 'No bio yet.'}</Text>
         </Card>
 
         {/* My Answers Section */}
@@ -148,7 +203,7 @@ export default function ProfileScreen() {
             <View style={styles.sectionTitleRow}>
               <Feather name="heart" size={20} color={buddiColors.primary} />
               <Text style={styles.sectionTitle}>
-                Interests ({profile.interests.length})
+                Interests ({profile.interests?.length || 0})
               </Text>
             </View>
             <Feather
@@ -159,11 +214,15 @@ export default function ProfileScreen() {
           </Pressable>
           {showInterests && (
             <View style={styles.interestsContainer}>
-              {profile.interests.map((interest, index) => (
-                <View key={index} style={styles.interestTag}>
-                  <Text style={styles.interestText}>{interest}</Text>
-                </View>
-              ))}
+              {profile.interests && profile.interests.length > 0 ? (
+                profile.interests.map((interest, index) => (
+                  <View key={index} style={styles.interestTag}>
+                    <Text style={styles.interestText}>{interest}</Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.emptyText}>No interests added yet.</Text>
+              )}
             </View>
           )}
         </Card>
@@ -224,15 +283,36 @@ export default function ProfileScreen() {
       <EditProfileModal
         visible={showEditModal}
         onClose={() => setShowEditModal(false)}
-        onSubmit={(data: ProfileInput) => {
-          console.log('Profile updated:', data);
-          // Update profile state with new data
-          setProfile((prev) => ({
-            ...prev,
-            ...data,
-            interests: data.interests || prev.interests,
-          }));
-          setShowEditModal(false);
+        onSubmit={async (data: ProfileInput) => {
+          if (!user?.uid || !profile.id) {
+            console.error('User or profile ID not available');
+            return;
+          }
+
+          try {
+            setIsLoading(true);
+            // Update profile in Firestore
+            const updatedProfile = await firebaseApi.profiles.update(profile.id, data);
+            
+            // Update local state with the updated profile
+            setProfile((prev) => ({
+              ...prev,
+              ...updatedProfile,
+              profilePhoto: updatedProfile.profilePhoto 
+                ? { uri: updatedProfile.profilePhoto } 
+                : prev.profilePhoto,
+              level: prev.level, // Keep UI-only fields
+              rating: prev.rating,
+              hasAnswers: prev.hasAnswers,
+            }));
+            
+            setShowEditModal(false);
+          } catch (error) {
+            console.error('Error updating profile:', error);
+            // You might want to show an error message to the user here
+          } finally {
+            setIsLoading(false);
+          }
         }}
         initialData={{
           name: profile.name,
@@ -240,7 +320,7 @@ export default function ProfileScreen() {
           location: profile.location,
           locationFlag: profile.locationFlag,
           bio: profile.bio,
-          interests: profile.interests,
+          interests: profile.interests || [],
         }}
       />
     </View>
@@ -251,6 +331,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: buddiColors.background,
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   header: {
     flexDirection: 'row',
