@@ -2,8 +2,11 @@ import { buddiColors } from '@/constants/theme';
 import type { ProfileInput } from '@/entities/profile';
 import { profileInputSchema } from '@/entities/profile';
 import { Feather } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
 import {
+	Alert,
+	Image,
 	Modal,
 	Platform,
 	Pressable,
@@ -52,6 +55,7 @@ export function EditProfileModal({ visible, onClose, onSubmit, initialData }: Ed
 	});
 	const [errors, setErrors] = useState<Record<string, string>>({});
 	const [interestInput, setInterestInput] = useState('');
+	const [photos, setPhotos] = useState<string[]>(initialData?.photos || []);
 
 	React.useEffect(() => {
 		if (visible && initialData) {
@@ -59,6 +63,7 @@ export function EditProfileModal({ visible, onClose, onSubmit, initialData }: Ed
 				interests: [],
 				...initialData,
 			});
+			setPhotos(initialData?.photos || []);
 		}
 	}, [visible, initialData]);
 
@@ -67,20 +72,23 @@ export function EditProfileModal({ visible, onClose, onSubmit, initialData }: Ed
 		setErrors((prev) => ({ ...prev, [field]: '' }));
 	};
 
-	const handleSubmit = () => {
+	const handleSubmit = async () => {
 		try {
+			// Photos will be handled separately - they need to be uploaded first
+			// For now, we'll pass the photos array as-is and let the parent handle upload
 			const dataToValidate = {
 				...formData,
 				interests: formData.interests || [],
+				photos: photos, // Include photos in the data
 			};
 			const validated = profileInputSchema.parse(dataToValidate);
 			onSubmit(validated);
 			setErrors({});
 			onClose();
 		} catch (error) {
-			if (error instanceof z.ZodError && error.errors) {
+			if (error instanceof z.ZodError) {
 				const newErrors: Record<string, string> = {};
-				error.errors.forEach((err) => {
+				error.issues.forEach((err) => {
 					if (err.path && err.path.length > 0) {
 						newErrors[err.path[0] as string] = err.message;
 					}
@@ -108,6 +116,55 @@ export function EditProfileModal({ visible, onClose, onSubmit, initialData }: Ed
 		} else {
 			addInterest(interest);
 		}
+	};
+
+	const pickImage = async () => {
+		if (photos.length >= 6) {
+			Alert.alert('Limit Reached', 'You can add up to 6 photos.');
+			return;
+		}
+
+		try {
+			// Request permissions using the latest API
+			const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+			
+			if (permissionResult.status !== 'granted') {
+				Alert.alert(
+					'Permission Required',
+					'Sorry, we need camera roll permissions to add photos!'
+				);
+				return;
+			}
+
+			// Launch image picker with latest API
+			const result = await ImagePicker.launchImageLibraryAsync({
+				mediaTypes: ['images'],
+				allowsEditing: true,
+				aspect: [1, 1],
+				quality: 0.8,
+				allowsMultipleSelection: false,
+			});
+
+			if (!result.canceled && result.assets && result.assets.length > 0) {
+				// Add the local URI to photos array (will be uploaded on save)
+				setPhotos([...photos, result.assets[0].uri]);
+			}
+		} catch (error) {
+			console.error('Error picking image:', error);
+			Alert.alert('Error', 'Failed to pick image. Please try again.');
+		}
+	};
+
+	const removePhoto = (index: number) => {
+		const newPhotos = photos.filter((_, i) => i !== index);
+		setPhotos(newPhotos);
+	};
+
+	const reorderPhotos = (fromIndex: number, toIndex: number) => {
+		const newPhotos = [...photos];
+		const [removed] = newPhotos.splice(fromIndex, 1);
+		newPhotos.splice(toIndex, 0, removed);
+		setPhotos(newPhotos);
 	};
 
 	return (
@@ -257,6 +314,53 @@ export function EditProfileModal({ visible, onClose, onSubmit, initialData }: Ed
 									</View>
 								</View>
 							)}
+						</View>
+
+						{/* Photos */}
+						<View style={styles.field}>
+							<Text style={styles.label}>Your Photos</Text>
+							<Text style={styles.helperText}>
+								Add up to 6 photos. The first is your main profile picture. Drag to reorder.
+							</Text>
+							<View style={styles.photosContainer}>
+								{photos.map((photo, index) => (
+									<View key={index} style={styles.photoWrapper}>
+										<Image source={{ uri: photo }} style={styles.photo} />
+										{index === 0 && (
+											<View style={styles.mainPhotoBadge}>
+												<Text style={styles.mainPhotoText}>Main</Text>
+											</View>
+										)}
+										<Pressable
+											style={styles.removePhotoButton}
+											onPress={() => removePhoto(index)}
+										>
+											<Feather name="x" size={16} color="#fff" />
+										</Pressable>
+										{index > 0 && (
+											<Pressable
+												style={styles.moveLeftButton}
+												onPress={() => reorderPhotos(index, index - 1)}
+											>
+												<Feather name="chevron-left" size={16} color={buddiColors.textPrimary} />
+											</Pressable>
+										)}
+										{index < photos.length - 1 && (
+											<Pressable
+												style={styles.moveRightButton}
+												onPress={() => reorderPhotos(index, index + 1)}
+											>
+												<Feather name="chevron-right" size={16} color={buddiColors.textPrimary} />
+											</Pressable>
+										)}
+									</View>
+								))}
+								{photos.length < 6 && (
+									<TouchableOpacity style={styles.addPhotoButton} onPress={pickImage}>
+										<Feather name="plus" size={24} color={buddiColors.textSecondary} />
+									</TouchableOpacity>
+								)}
+							</View>
 						</View>
 					</View>
 				</ScrollView>
@@ -457,5 +561,85 @@ const styles = StyleSheet.create({
 		fontSize: 16,
 		fontWeight: '600',
 		color: '#fff',
+	},
+	helperText: {
+		fontSize: 12,
+		color: buddiColors.textSecondary,
+		marginBottom: 12,
+	},
+	photosContainer: {
+		flexDirection: 'row',
+		flexWrap: 'wrap',
+		gap: 12,
+	},
+	photoWrapper: {
+		width: 100,
+		height: 100,
+		borderRadius: 12,
+		position: 'relative',
+		overflow: 'hidden',
+	},
+	photo: {
+		width: '100%',
+		height: '100%',
+		borderRadius: 12,
+	},
+	addPhotoButton: {
+		width: 100,
+		height: 100,
+		borderRadius: 12,
+		borderWidth: 2,
+		borderStyle: 'dashed',
+		borderColor: buddiColors.surfaceBorder,
+		backgroundColor: buddiColors.background,
+		alignItems: 'center',
+		justifyContent: 'center',
+	},
+	removePhotoButton: {
+		position: 'absolute',
+		top: 4,
+		right: 4,
+		width: 24,
+		height: 24,
+		borderRadius: 12,
+		backgroundColor: 'rgba(0, 0, 0, 0.6)',
+		alignItems: 'center',
+		justifyContent: 'center',
+	},
+	mainPhotoBadge: {
+		position: 'absolute',
+		bottom: 4,
+		left: 4,
+		backgroundColor: buddiColors.primary,
+		paddingHorizontal: 6,
+		paddingVertical: 2,
+		borderRadius: 4,
+	},
+	mainPhotoText: {
+		fontSize: 10,
+		fontWeight: '600',
+		color: '#fff',
+	},
+	moveLeftButton: {
+		position: 'absolute',
+		bottom: 4,
+		left: 4,
+		width: 24,
+		height: 24,
+		borderRadius: 12,
+		backgroundColor: 'rgba(255, 255, 255, 0.9)',
+		alignItems: 'center',
+		justifyContent: 'center',
+	},
+	moveRightButton: {
+		position: 'absolute',
+		bottom: 4,
+		right: 4,
+		width: 24,
+		height: 24,
+		borderRadius: 12,
+		backgroundColor: 'rgba(255, 255, 255, 0.9)',
+		alignItems: 'center',
+		justifyContent: 'center',
 	},
 });

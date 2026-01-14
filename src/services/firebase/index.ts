@@ -1,6 +1,6 @@
 // Import the functions you need from the SDKs you need
 import type { Group } from "@/entities/group";
-import { Profile } from "@/entities/profile";
+import type { Profile, ProfileInput } from "@/entities/profile";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import { initializeApp } from "firebase/app";
@@ -25,6 +25,13 @@ import {
 	updateDoc,
 	where
 } from "firebase/firestore";
+import {
+	deleteObject,
+	getDownloadURL,
+	getStorage,
+	ref,
+	uploadBytes,
+} from "firebase/storage";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -42,6 +49,9 @@ const app = initializeApp(firebaseConfig);
 
 // Initialize Firestore
 const db = getFirestore(app);
+
+// Initialize Firebase Storage
+const firebaseStorage = getStorage(app);
 
 // Initialize Auth with React Native persistence
 // Check if auth is already initialized to avoid "already-initialized" error
@@ -417,6 +427,50 @@ export const firebaseApi = {
 				return groups;
 			} catch (error) {
 				console.error("Error fetching user groups:", error);
+				throw error;
+			}
+		},
+	},
+	storage: {
+		uploadPhoto: async (uri: string, userId: string, photoIndex: number): Promise<string> => {
+			try {
+				if (!auth.currentUser) {
+					throw new Error("User must be authenticated to upload photos");
+				}
+
+				// Fetch the image as a blob
+				const response = await fetch(uri);
+				const blob = await response.blob();
+
+				// Create a unique filename
+				const filename = `profiles/${userId}/photo_${photoIndex}_${Date.now()}.jpg`;
+				const storageRef = ref(firebaseStorage, filename);
+
+				// Upload the file
+				await uploadBytes(storageRef, blob);
+
+				// Get the download URL
+				const downloadURL = await getDownloadURL(storageRef);
+				return downloadURL;
+			} catch (error) {
+				console.error("Error uploading photo:", error);
+				throw error;
+			}
+		},
+		deletePhoto: async (photoUrl: string): Promise<void> => {
+			try {
+				// Extract the path from the URL
+				// Firebase Storage URLs are in format: https://firebasestorage.googleapis.com/v0/b/{bucket}/o/{path}?alt=media&token={token}
+				const url = new URL(photoUrl);
+				const pathMatch = url.pathname.match(/\/o\/(.+)\?/);
+				if (!pathMatch) {
+					throw new Error("Invalid photo URL");
+				}
+				const decodedPath = decodeURIComponent(pathMatch[1]);
+				const storageRef = ref(firebaseStorage, decodedPath);
+				await deleteObject(storageRef);
+			} catch (error) {
+				console.error("Error deleting photo:", error);
 				throw error;
 			}
 		},

@@ -1,19 +1,16 @@
 import { EditProfileModal } from '@/components/EditProfileModal';
 import { SettingsDropdown } from '@/components/SettingsDropdown';
 import { buddiColors } from '@/constants/theme';
-import type { ProfileInput } from '@/entities/profile';
 import { useAuth } from '@/context/AuthProvider';
+import type { Profile, ProfileInput } from '@/entities/profile';
 import { Card } from '@/lib/components/Card';
+import { firebaseApi } from '@/services/firebase';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { firebaseApi } from '@/services/firebase';
-import type { Profile } from '@/entities/profile';
 
 export default function ProfileScreen() {
-  const router = useRouter();
   const { user } = useAuth();
   const [showInterests, setShowInterests] = useState(true);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -176,7 +173,7 @@ export default function ProfileScreen() {
           </View>
           {!profile.hasAnswers && (
             <Text style={styles.emptyText}>
-              You haven't answered any questions yet. Edit your profile to add them!
+              You haven&apos;t answered any questions yet. Edit your profile to add them!
             </Text>
           )}
         </Card>
@@ -321,6 +318,7 @@ export default function ProfileScreen() {
           locationFlag: profile.locationFlag,
           bio: profile.bio,
           interests: profile.interests || [],
+          photos: profile.photos || [],
         }}
       />
     </View>

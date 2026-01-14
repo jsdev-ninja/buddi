@@ -11,7 +11,8 @@ export const profileSchema = z.object({
 	location: z.string().max(200).optional(),
 	locationFlag: z.string().optional(), // Emoji flag
 	bio: z.string().max(1000).optional(),
-	profilePhoto: z.string().url().optional().nullable(), // Photo URL
+	profilePhoto: z.string().url().optional().nullable(), // Photo URL (deprecated - use photos[0])
+	photos: z.array(z.string().url()).optional(), // Array of photo URLs (max 6, first is main profile picture)
 	verified: z.boolean().optional(), // Verification status
 	interests: z.array(z.string()).optional(), // Array of interest tags
 	adventurePlan: z.string().max(500).optional(), // Optional adventure plan text
