@@ -445,8 +445,12 @@ export const firebaseApi = {
 						...data,
 					} as Group;
 
-					// Exclude user's own groups and excluded groups
-					if (group.userId !== excludeUserId && !excludeGroupIds.includes(group.id)) {
+					// Exclude completed, user's own groups, and excluded groups
+					if (
+						group.status !== "completed" &&
+						group.userId !== excludeUserId &&
+						!excludeGroupIds.includes(group.id)
+					) {
 						groups.push(group);
 					}
 				});
@@ -461,6 +465,99 @@ export const firebaseApi = {
 				return groups;
 			} catch (error) {
 				console.error("Error fetching discover groups:", error);
+				throw error;
+			}
+		},
+		getGroup: async (groupId: string): Promise<Group | null> => {
+			try {
+				const docRef = doc(db, "groups", groupId);
+				const snapshot = await getDoc(docRef);
+				if (!snapshot.exists()) return null;
+				return { id: snapshot.id, ...snapshot.data() } as Group;
+			} catch (error) {
+				console.error("Error fetching group:", error);
+				throw error;
+			}
+		},
+		update: async (
+			groupId: string,
+			updates: Partial<Omit<Group, "id" | "userId" | "createdAt">> & {
+				startDate?: string | number;
+				endDate?: string | number;
+			}
+		): Promise<void> => {
+			try {
+				if (!auth.currentUser) {
+					throw new Error("User must be authenticated to update a group");
+				}
+				const docRef = doc(db, "groups", groupId);
+				const snapshot = await getDoc(docRef);
+				if (!snapshot.exists()) throw new Error("Group not found");
+				const data = snapshot.data();
+				if (data?.userId !== auth.currentUser.uid) {
+					throw new Error("Only the group creator can update the group");
+				}
+				const now = Date.now();
+				const firestoreData: Record<string, unknown> = { ...updates, updatedAt: now };
+				if (firestoreData.startDate !== undefined) {
+					firestoreData.startDate =
+						typeof firestoreData.startDate === "string"
+							? new Date(firestoreData.startDate as string).getTime()
+							: firestoreData.startDate;
+				}
+				if (firestoreData.endDate !== undefined) {
+					firestoreData.endDate =
+						typeof firestoreData.endDate === "string"
+							? new Date(firestoreData.endDate as string).getTime()
+							: firestoreData.endDate;
+				}
+				await updateDoc(docRef, firestoreData);
+			} catch (error) {
+				console.error("Error updating group:", error);
+				throw error;
+			}
+		},
+		markCompleted: async (groupId: string): Promise<void> => {
+			try {
+				if (!auth.currentUser) {
+					throw new Error("User must be authenticated to mark a group as completed");
+				}
+				const docRef = doc(db, "groups", groupId);
+				const snapshot = await getDoc(docRef);
+				if (!snapshot.exists()) throw new Error("Group not found");
+				const data = snapshot.data();
+				if (data?.userId !== auth.currentUser.uid) {
+					throw new Error("Only the group creator can mark the group as completed");
+				}
+				const now = Date.now();
+				await updateDoc(docRef, { status: "completed", completedAt: now, updatedAt: now });
+			} catch (error) {
+				console.error("Error marking group completed:", error);
+				throw error;
+			}
+		},
+		addParticipant: async (groupId: string, userId: string): Promise<void> => {
+			try {
+				if (!auth.currentUser) {
+					throw new Error("User must be authenticated to add a participant");
+				}
+				const docRef = doc(db, "groups", groupId);
+				const snapshot = await getDoc(docRef);
+				if (!snapshot.exists()) throw new Error("Group not found");
+				const data = snapshot.data();
+				if (data?.userId !== auth.currentUser.uid) {
+					throw new Error("Only the group creator can add participants");
+				}
+				const participants: string[] = Array.isArray(data?.participants) ? [...data.participants] : [];
+				if (participants.includes(userId)) return;
+				participants.push(userId);
+				const maxMembers = (data?.maxMembers as number) || 10;
+				if (participants.length + 1 > maxMembers) {
+					throw new Error("Group has reached maximum members");
+				}
+				await updateDoc(docRef, { participants, updatedAt: Date.now() });
+			} catch (error) {
+				console.error("Error adding participant:", error);
 				throw error;
 			}
 		},
@@ -634,6 +731,23 @@ export const firebaseApi = {
 				});
 			} catch (error) {
 				console.error("Error disliking group:", error);
+				throw error;
+			}
+		},
+		// Get user IDs who liked a group (for group creator to see and add to group)
+		getGroupLikes: async (groupId: string): Promise<{ userId: string; createdAt: number }[]> => {
+			try {
+				const q = query(
+					collection(db, "groupLikes"),
+					where("groupId", "==", groupId)
+				);
+				const snapshot = await getDocs(q);
+				return snapshot.docs.map((d) => ({
+					userId: d.data().userId,
+					createdAt: d.data().createdAt || 0,
+				}));
+			} catch (error) {
+				console.error("Error fetching group likes:", error);
 				throw error;
 			}
 		},

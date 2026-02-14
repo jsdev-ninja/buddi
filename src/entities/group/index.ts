@@ -45,6 +45,10 @@ export const groupSchema = z.object({
 	// Participants (all optional)
 	participants: z.array(z.string()).optional(), // Array of user IDs
 
+	// Status: active (default) or completed
+	status: z.enum(["active", "completed"]).optional(),
+	completedAt: z.number().optional(), // JavaScript timestamp when marked completed
+
 	// Timestamps (optional - will be set when creating)
 	createdAt: z.number().optional(), // JavaScript timestamp (Date.now())
 	updatedAt: z.number().optional(), // JavaScript timestamp (Date.now())

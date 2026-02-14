@@ -21,6 +21,8 @@ interface CreateGroupModalProps {
 	visible: boolean;
 	onClose: () => void;
 	onSubmit: (data: GroupInput) => void;
+	mode?: 'create' | 'edit';
+	initialData?: Partial<GroupInput>;
 }
 
 type Step = 1 | 2 | 3;
@@ -41,7 +43,7 @@ const ACTIVITY_TYPES = [
 
 const DIFFICULTY_LEVELS = ['Easy', 'Moderate', 'Hard', 'Expert'] as const;
 
-export function CreateGroupModal({ visible, onClose, onSubmit }: CreateGroupModalProps) {
+export function CreateGroupModal({ visible, onClose, onSubmit, mode = 'create', initialData }: CreateGroupModalProps) {
 	const insets = useSafeAreaInsets();
 	const [step, setStep] = useState<Step>(1);
 	const [formData, setFormData] = useState<Partial<GroupInput>>({
@@ -53,7 +55,7 @@ export function CreateGroupModal({ visible, onClose, onSubmit }: CreateGroupModa
 	const [errors, setErrors] = useState<Record<string, string>>({});
 	const [tagInput, setTagInput] = useState('');
 
-	// Reset form when modal closes
+	// Reset form when modal closes; when opening in edit mode, seed from initialData
 	React.useEffect(() => {
 		if (!visible) {
 			setStep(1);
@@ -65,8 +67,17 @@ export function CreateGroupModal({ visible, onClose, onSubmit }: CreateGroupModa
 			});
 			setErrors({});
 			setTagInput('');
+		} else if (mode === 'edit' && initialData) {
+			setFormData((prev) => ({
+				...prev,
+				...initialData,
+				tags: initialData.tags ?? prev.tags,
+				participants: initialData.participants ?? prev.participants,
+				maxMembers: initialData.maxMembers ?? prev.maxMembers,
+				privacy: initialData.privacy ?? prev.privacy,
+			}));
 		}
-	}, [visible]);
+	}, [visible, mode, initialData]);
 
 	const updateField = (field: keyof GroupInput, value: any) => {
 		setFormData((prev) => ({ ...prev, [field]: value }));
@@ -152,6 +163,7 @@ export function CreateGroupModal({ visible, onClose, onSubmit }: CreateGroupModa
 			// Ensure all required fields have defaults
 			const dataToValidate = {
 				...formData,
+				type: 'group' as const,
 				tags: formData.tags || [],
 				participants: formData.participants || [],
 				privacy: formData.privacy || 'public',
@@ -228,7 +240,7 @@ export function CreateGroupModal({ visible, onClose, onSubmit }: CreateGroupModa
 					<View style={styles.header}>
 						<View style={styles.headerLeft}>
 							<Feather name="users" size={24} color={buddiColors.primary} />
-							<Text style={styles.title}>Create Group</Text>
+							<Text style={styles.title}>{mode === 'edit' ? 'Edit Group' : 'Create Group'}</Text>
 						</View>
 						<Pressable onPress={onClose} style={styles.closeButton}>
 							<Feather name="x" size={24} color={buddiColors.textPrimary} />
@@ -576,7 +588,7 @@ export function CreateGroupModal({ visible, onClose, onSubmit }: CreateGroupModa
 						</Pressable>
 						{step === 3 ? (
 							<Pressable style={styles.createButton} onPress={handleSubmit}>
-								<Text style={styles.createButtonText}>Create Group</Text>
+								<Text style={styles.createButtonText}>{mode === 'edit' ? 'Save changes' : 'Create Group'}</Text>
 							</Pressable>
 						) : (
 							<Pressable style={styles.nextButton} onPress={handleNext}>

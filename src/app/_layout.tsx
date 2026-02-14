@@ -23,6 +23,10 @@ function RootNavigator() {
 					<Stack.Screen name="(tabs)" options={{ headerShown: false }} />
 					<Stack.Screen name="settings" options={{ headerShown: false }} />
 					<Stack.Screen
+						name="group/[id]"
+						options={{ headerShown: false }}
+					/>
+					<Stack.Screen
 						name="onboarding/index"
 						options={{ headerShown: false, gestureEnabled: false }}
 					/>

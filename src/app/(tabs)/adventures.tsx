@@ -5,15 +5,39 @@ import { useAuth } from '@/context/AuthProvider';
 import type { Group, GroupInput } from '@/entities/group';
 import { completedGroupsAtom, userGroupsAtom } from '@/lib/atoms/groups';
 import { Card } from '@/lib/components/Card';
-import { trendingAdventures } from '@/lib/data/mockData';
+import type { AdventureGroup } from '@/lib/data/mockData';
 import { firebaseApi } from '@/services/firebase';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAtom } from 'jotai';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 type TabType = 'adventure' | 'myGroups' | 'completed';
+
+function formatGroupDate(date?: number | string): string {
+  if (!date) return '';
+  if (typeof date === 'number') return new Date(date).toLocaleDateString();
+  return new Date(date).toLocaleDateString();
+}
+
+function groupToAdventureGroup(group: Group): AdventureGroup {
+  return {
+    id: group.id,
+    name: group.groupName || 'Unnamed Group',
+    destination: group.destination || 'TBA',
+    description: group.description || '',
+    coverPhoto: group.groupPhoto
+      ? { uri: group.groupPhoto }
+      : require('@/assets/images/react-logo.png'),
+    startDate: formatGroupDate(group.startDate),
+    endDate: formatGroupDate(group.endDate),
+    currentMembers: (group.participants?.length || 0) + 1,
+    maxMembers: group.maxMembers || 10,
+    tags: group.tags || [],
+    activityType: group.activityType || 'Other',
+  };
+}
 
 export default function AdventuresScreen() {
   const router = useRouter();
@@ -22,50 +46,35 @@ export default function AdventuresScreen() {
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
   const [userGroups, setUserGroups] = useAtom(userGroupsAtom);
-  const [completedGroups] = useAtom(completedGroupsAtom);
+  const [completedGroups, setCompletedGroups] = useAtom(completedGroupsAtom);
   const [isLoadingGroups, setIsLoadingGroups] = useState(false);
+  const [discoverGroups, setDiscoverGroups] = useState<AdventureGroup[]>([]);
+  const [isLoadingDiscover, setIsLoadingDiscover] = useState(false);
 
-  // Fetch user groups from Firestore
+  // Fetch user groups (active + completed) from Firestore
   useEffect(() => {
     const fetchUserGroups = async () => {
       if (!user?.uid) {
         setUserGroups([]);
+        setCompletedGroups([]);
         return;
       }
 
       try {
         setIsLoadingGroups(true);
         const groups = await firebaseApi.groups.getUserGroups(user.uid);
-        
-        // Convert Firestore Group to AdventureGroup format for display
-        const convertedGroups = groups.map((group: Group) => {
-          // Format dates - handle both number timestamps and date strings
-          const formatDate = (date?: number | string) => {
-            if (!date) return '';
-            if (typeof date === 'number') {
-              return new Date(date).toLocaleDateString();
-            }
-            return new Date(date).toLocaleDateString();
-          };
-
-          return {
-            id: group.id,
-            name: group.groupName || 'Unnamed Group',
-            destination: group.destination || 'TBA',
-            description: group.description || '',
-            coverPhoto: group.groupPhoto 
-              ? { uri: group.groupPhoto } 
-              : require('@/assets/images/react-logo.png'), // Default photo
-            startDate: formatDate(group.startDate),
-            endDate: formatDate(group.endDate),
-            currentMembers: (group.participants?.length || 0) + 1, // +1 for creator
-            maxMembers: group.maxMembers || 10,
-            tags: group.tags || [],
-            activityType: group.activityType || 'Other',
-          };
+        const active: AdventureGroup[] = [];
+        const completed: AdventureGroup[] = [];
+        groups.forEach((group: Group) => {
+          const converted = groupToAdventureGroup(group);
+          if (group.status === 'completed') {
+            completed.push(converted);
+          } else {
+            active.push(converted);
+          }
         });
-
-        setUserGroups(convertedGroups);
+        setUserGroups(active);
+        setCompletedGroups(completed);
       } catch (error) {
         console.error('Error fetching user groups:', error);
         Alert.alert('Error', 'Failed to load your groups. Please try again.');
@@ -75,7 +84,29 @@ export default function AdventuresScreen() {
     };
 
     fetchUserGroups();
-  }, [user?.uid, setUserGroups]);
+  }, [user?.uid, setUserGroups, setCompletedGroups]);
+
+  // Fetch discover groups for Adventure tab
+  const fetchDiscoverGroups = useCallback(async () => {
+    if (!user?.uid) {
+      setDiscoverGroups([]);
+      return;
+    }
+    try {
+      setIsLoadingDiscover(true);
+      const hides = await firebaseApi.likes.getUserHides(user.uid);
+      const firestoreGroups = await firebaseApi.groups.getDiscoverGroups(user.uid, hides.groups);
+      setDiscoverGroups(firestoreGroups.map((g: Group) => groupToAdventureGroup(g)));
+    } catch (error) {
+      console.error('Error fetching discover groups:', error);
+    } finally {
+      setIsLoadingDiscover(false);
+    }
+  }, [user?.uid]);
+
+  useEffect(() => {
+    if (activeTab === 'adventure') fetchDiscoverGroups();
+  }, [activeTab, fetchDiscoverGroups]);
 
   return (
     <View style={styles.container}>
@@ -158,47 +189,69 @@ export default function AdventuresScreen() {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Feather name="trending-up" size={20} color={buddiColors.primary} />
-              <Text style={styles.sectionTitle}>Trending Adventures</Text>
+              <Text style={styles.sectionTitle}>Discover Groups</Text>
             </View>
 
-            {trendingAdventures.map((adventure) => (
-              <Card key={adventure.id} style={styles.adventureCard}>
-                <ImageBackground
-                  source={adventure.coverPhoto}
-                  resizeMode="cover"
-                  style={styles.cardImage}
-                >
-                  <View style={styles.cardOverlay}>
-                    {/* Tags */}
-                    <View style={styles.tagsContainer}>
-                      <View style={styles.tagWhite}>
-                        <Text style={styles.tagTextWhite}>{adventure.category}</Text>
-                      </View>
-                      <View style={styles.tagOrange}>
-                        <Text style={styles.tagTextOrange}>{adventure.difficulty}</Text>
-                      </View>
-                    </View>
-                  </View>
-                </ImageBackground>
-
-                {/* Card Content */}
-                <View style={styles.cardContent}>
-                  <Text style={styles.adventureName}>{adventure.name}</Text>
-                  <View style={styles.adventureMeta}>
-                    <View style={styles.metaRow}>
-                      <Feather name="map-pin" size={16} color={buddiColors.textSecondary} />
-                      <Text style={styles.metaText}>{adventure.destination}</Text>
-                    </View>
-                    {adventure.progress && (
-                      <View style={styles.metaRow}>
-                        <Feather name="layers" size={16} color={buddiColors.textSecondary} />
-                        <Text style={styles.metaText}>{adventure.progress}</Text>
-                      </View>
-                    )}
-                  </View>
+            {isLoadingDiscover ? (
+              <Card style={styles.emptyCard}>
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyTitle}>Loading...</Text>
                 </View>
               </Card>
-            ))}
+            ) : discoverGroups.length === 0 ? (
+              <Card style={styles.emptyCard}>
+                <View style={styles.emptyState}>
+                  <Feather name="compass" size={48} color={buddiColors.surfaceBorder} />
+                  <Text style={styles.emptyTitle}>No groups to discover</Text>
+                  <Text style={styles.emptySubtitle}>
+                    Check back later or create your own group.
+                  </Text>
+                </View>
+              </Card>
+            ) : (
+              discoverGroups.map((adventure) => (
+                <Pressable
+                  key={adventure.id}
+                  onPress={() => router.push(`/group/${adventure.id}` as any)}
+                >
+                  <Card style={styles.adventureCard}>
+                    <ImageBackground
+                      source={adventure.coverPhoto}
+                      resizeMode="cover"
+                      style={styles.cardImage}
+                    >
+                      <View style={styles.cardOverlay}>
+                        <View style={styles.tagsContainer}>
+                          {adventure.tags.slice(0, 1).map((tag, idx) => (
+                            <View key={idx} style={styles.tagWhite}>
+                              <Text style={styles.tagTextWhite}>{tag}</Text>
+                            </View>
+                          ))}
+                          <View style={styles.tagOrange}>
+                            <Text style={styles.tagTextOrange}>{adventure.activityType}</Text>
+                          </View>
+                        </View>
+                      </View>
+                    </ImageBackground>
+                    <View style={styles.cardContent}>
+                      <Text style={styles.adventureName}>{adventure.name}</Text>
+                      <View style={styles.adventureMeta}>
+                        <View style={styles.metaRow}>
+                          <Feather name="map-pin" size={16} color={buddiColors.textSecondary} />
+                          <Text style={styles.metaText}>{adventure.destination}</Text>
+                        </View>
+                        <View style={styles.metaRow}>
+                          <Feather name="users" size={16} color={buddiColors.textSecondary} />
+                          <Text style={styles.metaText}>
+                            {adventure.currentMembers}/{adventure.maxMembers}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  </Card>
+                </Pressable>
+              ))
+            )}
           </View>
         )}
 
@@ -234,7 +287,11 @@ export default function AdventuresScreen() {
               </Card>
             ) : (
               userGroups.map((group) => (
-                <Card key={group.id} style={styles.adventureCard}>
+                <Pressable
+                  key={group.id}
+                  onPress={() => router.push(`/group/${group.id}` as any)}
+                >
+                  <Card style={styles.adventureCard}>
                   <ImageBackground
                     source={group.coverPhoto}
                     resizeMode="cover"
@@ -287,6 +344,7 @@ export default function AdventuresScreen() {
                     )}
                   </View>
                 </Card>
+                </Pressable>
               ))
             )}
           </View>
@@ -311,7 +369,11 @@ export default function AdventuresScreen() {
               </Card>
             ) : (
               completedGroups.map((group) => (
-                <Card key={group.id} style={styles.adventureCard}>
+                <Pressable
+                  key={group.id}
+                  onPress={() => router.push(`/group/${group.id}` as any)}
+                >
+                  <Card style={styles.adventureCard}>
                   <ImageBackground
                     source={group.coverPhoto}
                     resizeMode="cover"
@@ -341,6 +403,7 @@ export default function AdventuresScreen() {
                     </View>
                   </View>
                 </Card>
+                </Pressable>
               ))
             )}
           </View>
@@ -378,32 +441,15 @@ export default function AdventuresScreen() {
             // Refresh groups from Firestore to show the new group
             if (user?.uid) {
               const groups = await firebaseApi.groups.getUserGroups(user.uid);
-              
-              // Format dates - handle both number timestamps and date strings
-              const formatDate = (date?: number | string) => {
-                if (!date) return '';
-                if (typeof date === 'number') {
-                  return new Date(date).toLocaleDateString();
-                }
-                return new Date(date).toLocaleDateString();
-              };
-
-              const convertedGroups = groups.map((group: Group) => ({
-                id: group.id,
-                name: group.groupName || 'Unnamed Group',
-                destination: group.destination || 'TBA',
-                description: group.description || '',
-                coverPhoto: group.groupPhoto 
-                  ? { uri: group.groupPhoto } 
-                  : require('@/assets/images/react-logo.png'),
-                startDate: formatDate(group.startDate),
-                endDate: formatDate(group.endDate),
-                currentMembers: (group.participants?.length || 0) + 1,
-                maxMembers: group.maxMembers || 10,
-                tags: group.tags || [],
-                activityType: group.activityType || 'Other',
-              }));
-              setUserGroups(convertedGroups);
+              const active: AdventureGroup[] = [];
+              const completed: AdventureGroup[] = [];
+              groups.forEach((group: Group) => {
+                const converted = groupToAdventureGroup(group);
+                if (group.status === 'completed') completed.push(converted);
+                else active.push(converted);
+              });
+              setUserGroups(active);
+              setCompletedGroups(completed);
             }
             
             setShowCreateGroup(false);
