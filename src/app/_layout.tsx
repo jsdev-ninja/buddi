@@ -5,6 +5,7 @@ import "react-native-reanimated";
 
 import { SplashScreenController } from "@/components/SplashScreenController";
 import { AuthProvider, useAuth } from "@/context/AuthProvider";
+import { NotificationSetup } from "@/context/NotificationProvider";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
 export const unstable_settings = {
@@ -15,13 +16,16 @@ function RootNavigator() {
 	const colorScheme = useColorScheme();
 	const { user } = useAuth();
 
-	console.log("user", user);
-
 	return (
 		<ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
 			<Stack>
 				<Stack.Protected guard={!!user}>
 					<Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+					<Stack.Screen name="settings" options={{ headerShown: false }} />
+					<Stack.Screen
+						name="onboarding/index"
+						options={{ headerShown: false, gestureEnabled: false }}
+					/>
 				</Stack.Protected>
 
 				<Stack.Protected guard={!user}>
@@ -42,6 +46,7 @@ function RootNavigator() {
 export default function RootLayout() {
 	return (
 		<AuthProvider>
+			<NotificationSetup />
 			<SplashScreenController />
 			<RootNavigator />
 		</AuthProvider>

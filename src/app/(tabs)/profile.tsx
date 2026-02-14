@@ -51,11 +51,12 @@ export default function ProfileScreen() {
         const firestoreProfile = await firebaseApi.profiles.getProfile(user.uid);
         
         if (firestoreProfile) {
+          const mainPhotoUrl = firestoreProfile.photos?.[0] ?? firestoreProfile.profilePhoto;
           setProfile((prev) => ({
             ...prev,
             ...firestoreProfile,
-            profilePhoto: firestoreProfile.profilePhoto 
-              ? { uri: firestoreProfile.profilePhoto } 
+            profilePhoto: mainPhotoUrl
+              ? { uri: mainPhotoUrl }
               : require('@/assets/images/react-logo.png'),
             level: prev.level, // Keep UI-only fields
             rating: prev.rating,
@@ -128,7 +129,9 @@ export default function ProfileScreen() {
           <View style={styles.profileInfo}>
             <View style={styles.nameRow}>
               <Text style={styles.name}>{profile.name || 'No name'}</Text>
-              {profile.age && <Text style={styles.age}>{profile.age}</Text>}
+              {profile.age != null && profile.age > 0 ? (
+                <Text style={styles.age}>{profile.age}</Text>
+              ) : null}
             </View>
             <View style={styles.locationRow}>
               <Feather name="map-pin" size={16} color={buddiColors.textSecondary} />
@@ -187,7 +190,21 @@ export default function ProfileScreen() {
             </View>
           </View>
           <View style={styles.photosContainer}>
-            <Image source={profile.profilePhoto} style={styles.photo} />
+            {(profile.photos && profile.photos.length > 0)
+              ? profile.photos.map((photoUrl, index) => (
+                  <Image
+                    key={index}
+                    source={{ uri: photoUrl }}
+                    style={styles.photo}
+                    resizeMode="cover"
+                  />
+                ))
+              : (
+                <View style={styles.photoPlaceholder}>
+                  <Feather name="image" size={32} color={buddiColors.surfaceBorder} />
+                  <Text style={styles.photoPlaceholderText}>No photos yet</Text>
+                </View>
+              )}
           </View>
         </Card>
 
@@ -292,12 +309,13 @@ export default function ProfileScreen() {
             const updatedProfile = await firebaseApi.profiles.update(profile.id, data);
             
             // Update local state with the updated profile
+            const mainPhotoUrl = updatedProfile.photos?.[0] ?? updatedProfile.profilePhoto;
             setProfile((prev) => ({
               ...prev,
               ...updatedProfile,
-              profilePhoto: updatedProfile.profilePhoto 
-                ? { uri: updatedProfile.profilePhoto } 
-                : prev.profilePhoto,
+              profilePhoto: mainPhotoUrl
+                ? { uri: mainPhotoUrl }
+                : require('@/assets/images/react-logo.png'),
               level: prev.level, // Keep UI-only fields
               rating: prev.rating,
               hasAnswers: prev.hasAnswers,
@@ -517,12 +535,28 @@ const styles = StyleSheet.create({
   },
   photosContainer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
   },
   photo: {
     width: 100,
     height: 100,
     borderRadius: 12,
+    backgroundColor: buddiColors.surfaceMuted,
+  },
+  photoPlaceholder: {
+    width: '100%',
+    minHeight: 100,
+    borderRadius: 12,
+    backgroundColor: buddiColors.surfaceMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+  },
+  photoPlaceholderText: {
+    fontSize: 14,
+    color: buddiColors.textSecondary,
+    marginTop: 8,
   },
   interestsContainer: {
     flexDirection: 'row',

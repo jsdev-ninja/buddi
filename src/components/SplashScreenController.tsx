@@ -1,12 +1,11 @@
-import { authLoadingAtom } from '@/lib/atoms/user';
+import { useAuth } from '@/context/AuthProvider';
 import { SplashScreen } from 'expo-router';
-import { useAtomValue } from 'jotai';
 import { useEffect } from 'react';
 
 SplashScreen.preventAutoHideAsync();
 
 export function SplashScreenController() {
-	const isLoading = useAtomValue(authLoadingAtom);
+	const { isLoading } = useAuth();
 
 	useEffect(() => {
 		if (!isLoading) {

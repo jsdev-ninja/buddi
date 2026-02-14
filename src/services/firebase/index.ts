@@ -18,12 +18,15 @@ import {
 	addDoc,
 	collection,
 	doc,
+	getDoc,
 	getDocs,
 	getFirestore,
+	onSnapshot,
 	orderBy,
 	query,
+	setDoc,
 	updateDoc,
-	where
+	where,
 } from "firebase/firestore";
 import {
 	deleteObject,
@@ -106,6 +109,7 @@ const GOOGLE_IOS_CLIENT_ID =
 GoogleSignin.configure({
 	webClientId: GOOGLE_WEB_CLIENT_ID, // From Firebase Console (Web client ID)
 	iosClientId: GOOGLE_IOS_CLIENT_ID, // From GoogleService-Info.plist (iOS client ID)
+
 	// Android client ID will be read from google-services.json if available
 });
 
@@ -134,10 +138,12 @@ export const firebaseApi = {
 				}
 
 				const now = Date.now();
+				const userId = auth.currentUser.uid;
 
 				let firestoreData: any = {
 					...profileData,
-					userId: auth.currentUser.uid,
+					type: "profile",
+					userId,
 				};
 
 				firestoreData = cleanObject(firestoreData);
@@ -145,11 +151,13 @@ export const firebaseApi = {
 				firestoreData.createdAt = now;
 				firestoreData.updatedAt = now;
 
-				const docRef = await addDoc(collection(db, "profiles"), firestoreData);
+				// Use userId as document ID so getProfile(userId) works
+				const profileRef = doc(db, "profiles", userId);
+				await setDoc(profileRef, firestoreData);
 
 				return {
 					...firestoreData,
-					id: docRef.id,
+					id: userId,
 					createdAt: now,
 					updatedAt: now,
 				} as Profile;
@@ -161,32 +169,21 @@ export const firebaseApi = {
 		getProfile: async (userId: string): Promise<Profile | null> => {
 			try {
 				if (!userId) {
-					throw new Error("User ID is required to fetch a profile");
+					return null
 				}
-
-				// Query profile where userId matches (profiles use auto-generated IDs, not userId as doc ID)
-				const q = query(
-					collection(db, "profiles"),
-					where("userId", "==", userId)
-				);
-
-				const querySnapshot = await getDocs(q);
-
-				if (querySnapshot.empty) {
+				const docSnapshot = await getDoc(doc(db, "profiles", userId));
+				if (!docSnapshot.exists()) {
 					return null;
 				}
-
-				// Get the first matching profile (should only be one per user)
-				const docSnapshot = querySnapshot.docs[0];
 				const data = docSnapshot.data();
-
 				return {
 					id: docSnapshot.id,
 					...data,
 				} as Profile;
+
 			} catch (error) {
 				console.error("Error fetching profile:", error);
-				throw error;
+				return null;
 			}
 		},
 		update: async (profileId: string, profileData: Partial<ProfileInput>): Promise<Profile> => {
@@ -305,7 +302,7 @@ export const firebaseApi = {
 				};
 			} catch (error: any) {
 				if (error.code === "SIGN_IN_CANCELLED" || error.code === "10") {
-					throw new Error("Google sign-in cancelled by user");
+					throw new Error("Google sign-in cancelled by user", { cause: error });
 				}
 				console.error("Google sign-in error:", error);
 				throw error;
@@ -430,6 +427,43 @@ export const firebaseApi = {
 				throw error;
 			}
 		},
+		// Get discoverable groups (public groups)
+		getDiscoverGroups: async (excludeUserId: string, excludeGroupIds: string[] = []): Promise<Group[]> => {
+			try {
+				const q = query(
+					collection(db, "groups"),
+					where("privacy", "==", "public")
+				);
+
+				const querySnapshot = await getDocs(q);
+				const groups: Group[] = [];
+
+				querySnapshot.forEach((doc) => {
+					const data = doc.data();
+					const group = {
+						id: doc.id,
+						...data,
+					} as Group;
+
+					// Exclude user's own groups and excluded groups
+					if (group.userId !== excludeUserId && !excludeGroupIds.includes(group.id)) {
+						groups.push(group);
+					}
+				});
+
+				// Sort by createdAt if available (newest first)
+				groups.sort((a, b) => {
+					const aTime = a.createdAt || 0;
+					const bTime = b.createdAt || 0;
+					return bTime - aTime;
+				});
+
+				return groups;
+			} catch (error) {
+				console.error("Error fetching discover groups:", error);
+				throw error;
+			}
+		},
 	},
 	storage: {
 		uploadPhoto: async (uri: string, userId: string, photoIndex: number): Promise<string> => {
@@ -472,6 +506,555 @@ export const firebaseApi = {
 			} catch (error) {
 				console.error("Error deleting photo:", error);
 				throw error;
+			}
+		},
+	},
+	likes: {
+		// Like a profile
+		likeProfile: async (profileId: string): Promise<void> => {
+			try {
+				if (!auth.currentUser) {
+					throw new Error("User must be authenticated to like a profile");
+				}
+
+				const userId = String(auth.currentUser.uid);
+				const likeDocRef = doc(db, "profileLikes", `${userId}_${profileId}`);
+
+				// Skip if already liked (avoids update permission)
+				const existingLike = await getDoc(likeDocRef);
+				if (existingLike.exists()) {
+					return;
+				}
+
+				// Get the profile to get the profile owner's userId
+				const profileDoc = await getDoc(doc(db, "profiles", profileId));
+				if (!profileDoc.exists()) {
+					throw new Error("Profile not found");
+				}
+				const profileData = profileDoc.data();
+				const likedUserId = String((profileData?.userId as string | undefined) ?? profileId);
+
+				const likeData = {
+					userId,
+					profileId: String(profileId),
+					likedUserId,
+					createdAt: Date.now(),
+					type: "like",
+				};
+				await setDoc(likeDocRef, likeData);
+
+				// Check for mutual like (match) - check if the liked user has liked this user's profile
+				const currentUserProfile = await firebaseApi.profiles.getProfile(userId);
+				if (currentUserProfile) {
+					const reverseLikeQuery = query(
+						collection(db, "profileLikes"),
+						where("userId", "==", likedUserId),
+						where("profileId", "==", currentUserProfile.id)
+					);
+					const reverseLikeSnapshot = await getDocs(reverseLikeQuery);
+
+					if (!reverseLikeSnapshot.empty) {
+						const matchId = userId < likedUserId ? `${userId}_${likedUserId}` : `${likedUserId}_${userId}`;
+						const matchRef = doc(db, "matches", matchId);
+						const existingMatch = await getDoc(matchRef);
+						if (!existingMatch.exists()) {
+							await setDoc(matchRef, {
+								user1Id: userId < likedUserId ? userId : likedUserId,
+								user2Id: userId < likedUserId ? likedUserId : userId,
+								createdAt: Date.now(),
+								type: "profile",
+							});
+						}
+					}
+				}
+			} catch (error) {
+				console.error("Error liking profile:", error);
+				throw error;
+			}
+		},
+		// Dislike (pass) a profile - hide for 7 days
+		dislikeProfile: async (profileId: string): Promise<void> => {
+			try {
+				if (!auth.currentUser) {
+					throw new Error("User must be authenticated to dislike a profile");
+				}
+
+				const userId = auth.currentUser.uid;
+				const hideUntil = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days
+				const hideDocRef = doc(db, "profileHides", `${userId}_${profileId}`);
+
+				await setDoc(hideDocRef, {
+					userId,
+					profileId,
+					hideUntil,
+					createdAt: Date.now(),
+				});
+			} catch (error) {
+				console.error("Error disliking profile:", error);
+				throw error;
+			}
+		},
+		// Like a group
+		likeGroup: async (groupId: string): Promise<void> => {
+			try {
+				if (!auth.currentUser) {
+					throw new Error("User must be authenticated to like a group");
+				}
+
+				const userId = auth.currentUser.uid;
+				const likeDocRef = doc(db, "groupLikes", `${userId}_${groupId}`);
+
+				await setDoc(likeDocRef, {
+					userId,
+					groupId,
+					createdAt: Date.now(),
+					type: "like",
+				});
+			} catch (error) {
+				console.error("Error liking group:", error);
+				throw error;
+			}
+		},
+		// Dislike (pass) a group - hide for 7 days
+		dislikeGroup: async (groupId: string): Promise<void> => {
+			try {
+				if (!auth.currentUser) {
+					throw new Error("User must be authenticated to dislike a group");
+				}
+
+				const userId = auth.currentUser.uid;
+				const hideUntil = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days
+				const hideDocRef = doc(db, "groupHides", `${userId}_${groupId}`);
+
+				await setDoc(hideDocRef, {
+					userId,
+					groupId,
+					hideUntil,
+					createdAt: Date.now(),
+				});
+			} catch (error) {
+				console.error("Error disliking group:", error);
+				throw error;
+			}
+		},
+		// Get user's likes
+		getUserLikes: async (userId: string): Promise<{ profiles: string[]; groups: string[] }> => {
+			try {
+				const profileLikesQuery = query(
+					collection(db, "profileLikes"),
+					where("userId", "==", userId)
+				);
+				const groupLikesQuery = query(
+					collection(db, "groupLikes"),
+					where("userId", "==", userId)
+				);
+
+				const [profileLikesSnapshot, groupLikesSnapshot] = await Promise.all([
+					getDocs(profileLikesQuery),
+					getDocs(groupLikesQuery),
+				]);
+
+				const profiles = profileLikesSnapshot.docs.map((doc) => doc.data().profileId);
+				const groups = groupLikesSnapshot.docs.map((doc) => doc.data().groupId);
+
+				return { profiles, groups };
+			} catch (error) {
+				console.error("Error fetching user likes:", error);
+				throw error;
+			}
+		},
+		// Get user's hides
+		getUserHides: async (userId: string): Promise<{ profiles: string[]; groups: string[] }> => {
+			try {
+				const now = Date.now();
+				const profileHidesQuery = query(
+					collection(db, "profileHides"),
+					where("userId", "==", userId)
+				);
+				const groupHidesQuery = query(
+					collection(db, "groupHides"),
+					where("userId", "==", userId)
+				);
+
+				const [profileHidesSnapshot, groupHidesSnapshot] = await Promise.all([
+					getDocs(profileHidesQuery),
+					getDocs(groupHidesQuery),
+				]);
+
+				// Filter out expired hides
+				const profiles = profileHidesSnapshot.docs
+					.filter((doc) => doc.data().hideUntil > now)
+					.map((doc) => doc.data().profileId);
+				const groups = groupHidesSnapshot.docs
+					.filter((doc) => doc.data().hideUntil > now)
+					.map((doc) => doc.data().groupId);
+
+				return { profiles, groups };
+			} catch (error) {
+				console.error("Error fetching user hides:", error);
+				throw error;
+			}
+		},
+	},
+	matches: {
+		// Get user's matches
+		getUserMatches: async (userId: string): Promise<{ matchId: string; userId: string; createdAt: number }[]> => {
+			try {
+				const matchesQuery1 = query(
+					collection(db, "matches"),
+					where("user1Id", "==", userId),
+					where("type", "==", "profile")
+				);
+				const matchesQuery2 = query(
+					collection(db, "matches"),
+					where("user2Id", "==", userId),
+					where("type", "==", "profile")
+				);
+
+				const [snapshot1, snapshot2] = await Promise.all([
+					getDocs(matchesQuery1),
+					getDocs(matchesQuery2),
+				]);
+
+				const matches: { matchId: string; userId: string; createdAt: number }[] = [];
+
+				snapshot1.forEach((doc) => {
+					const data = doc.data();
+					matches.push({
+						matchId: doc.id,
+						userId: data.user2Id,
+						createdAt: data.createdAt,
+					});
+				});
+
+				snapshot2.forEach((doc) => {
+					const data = doc.data();
+					matches.push({
+						matchId: doc.id,
+						userId: data.user1Id,
+						createdAt: data.createdAt,
+					});
+				});
+
+				return matches;
+			} catch (error) {
+				console.error("Error fetching matches:", error);
+				throw error;
+			}
+		},
+		// Get profiles that liked the user
+		getLikesReceived: async (userId: string): Promise<string[]> => {
+			try {
+				// Get all likes where the user's profile was liked
+				const profile = await firebaseApi.profiles.getProfile(userId);
+				if (!profile) {
+					return [];
+				}
+
+				const likesQuery = query(
+					collection(db, "profileLikes"),
+					where("profileId", "==", profile.id)
+				);
+
+				const snapshot = await getDocs(likesQuery);
+				return snapshot.docs.map((doc) => doc.data().userId);
+			} catch (error) {
+				console.error("Error fetching likes received:", error);
+				throw error;
+			}
+		},
+	},
+	chat: {
+		// Create or get conversation
+		createConversation: async (participantIds: string[], isGroup: boolean = false, groupId?: string, groupName?: string): Promise<string> => {
+			try {
+				if (!auth.currentUser) {
+					throw new Error("User must be authenticated to create a conversation");
+				}
+
+				const userId = auth.currentUser.uid;
+				const allParticipants = [...new Set([userId, ...participantIds])].sort();
+
+				// For 1-on-1 chats, use sorted user IDs as conversation ID
+				// For group chats, generate a unique ID
+				const conversationId = isGroup
+					? `group_${groupId || Date.now()}`
+					: `${allParticipants[0]}_${allParticipants[1]}`;
+
+				const conversationRef = doc(db, "conversations", conversationId);
+				const conversationDoc = await getDoc(conversationRef);
+
+				if (!conversationDoc.exists()) {
+					await setDoc(conversationRef, {
+						participants: allParticipants,
+						isGroup,
+						groupId: groupId || null,
+						groupName: groupName || null,
+						createdAt: Date.now(),
+						updatedAt: Date.now(),
+						lastMessage: null,
+						lastMessageAt: null,
+					});
+				}
+
+				return conversationId;
+			} catch (error) {
+				console.error("Error creating conversation:", error);
+				throw error;
+			}
+		},
+		// Get user's conversations
+		getConversations: async (userId: string): Promise<{
+			id: string;
+			name: string;
+			lastMessage?: string;
+			timestamp?: string;
+			members?: number;
+			isGroup?: boolean;
+			participantIds: string[];
+		}[]> => {
+			try {
+				const conversationsQuery = query(
+					collection(db, "conversations"),
+					where("participants", "array-contains", userId),
+					orderBy("updatedAt", "desc")
+				);
+
+				const snapshot = await getDocs(conversationsQuery);
+				const conversations: {
+					id: string;
+					name: string;
+					lastMessage?: string;
+					timestamp?: string;
+					members?: number;
+					isGroup?: boolean;
+					participantIds: string[];
+				}[] = [];
+
+				for (const docSnapshot of snapshot.docs) {
+					const data = docSnapshot.data();
+					const otherParticipantIds = data.participants.filter((id: string) => id !== userId);
+
+					// For group chats, use group name
+					// For 1-on-1, fetch the other participant's profile name
+					let name = data.groupName || "Unknown";
+					if (!data.isGroup && otherParticipantIds.length > 0) {
+						const otherProfile = await firebaseApi.profiles.getProfile(otherParticipantIds[0]);
+						name = otherProfile?.name || "Unknown";
+					}
+
+					const lastMessageAt = data.lastMessageAt;
+					const timestamp = lastMessageAt
+						? new Date(lastMessageAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })
+						: undefined;
+
+					conversations.push({
+						id: docSnapshot.id,
+						name,
+						lastMessage: data.lastMessage || undefined,
+						timestamp,
+						members: data.participants.length,
+						isGroup: data.isGroup || false,
+						participantIds: data.participants,
+					});
+				}
+
+				return conversations;
+			} catch (error) {
+				console.error("Error fetching conversations:", error);
+				throw error;
+			}
+		},
+		// Get a single conversation by ID (e.g. when opening chat for a new match)
+		getConversation: async (
+			conversationId: string,
+			userId: string
+		): Promise<{ name: string; participants: string[]; isGroup: boolean } | null> => {
+			try {
+				const conversationRef = doc(db, "conversations", conversationId);
+				const conversationDoc = await getDoc(conversationRef);
+				if (!conversationDoc.exists()) return null;
+				const data = conversationDoc.data();
+				const participants = data.participants || [];
+				const isGroup = data.isGroup || false;
+				let name = data.groupName || "Unknown";
+				if (!isGroup) {
+					const otherId = participants.find((id: string) => id !== userId);
+					if (otherId) {
+						const profile = await firebaseApi.profiles.getProfile(otherId);
+						name = profile?.name || "Unknown";
+					}
+				}
+				return { name, participants, isGroup };
+			} catch (error) {
+				console.error("Error fetching conversation:", error);
+				return null;
+			}
+		},
+		// Send a message
+		sendMessage: async (conversationId: string, text: string): Promise<string> => {
+			try {
+				if (!auth.currentUser) {
+					throw new Error("User must be authenticated to send a message");
+				}
+
+				const userId = auth.currentUser.uid;
+				const messageRef = doc(collection(db, "conversations", conversationId, "messages"));
+
+				const messageData = {
+					userId,
+					text,
+					createdAt: Date.now(),
+				};
+
+				await setDoc(messageRef, messageData);
+
+				// Update conversation's last message and timestamp
+				const conversationRef = doc(db, "conversations", conversationId);
+				await updateDoc(conversationRef, {
+					lastMessage: text,
+					lastMessageAt: Date.now(),
+					updatedAt: Date.now(),
+				});
+
+				return messageRef.id;
+			} catch (error) {
+				console.error("Error sending message:", error);
+				throw error;
+			}
+		},
+		// Get messages for a conversation
+		getMessages: async (conversationId: string): Promise<{
+			id: string;
+			text: string;
+			timestamp: string;
+			isSent: boolean;
+		}[]> => {
+			try {
+				if (!auth.currentUser) {
+					throw new Error("User must be authenticated to get messages");
+				}
+
+				const userId = auth.currentUser.uid;
+				const messagesQuery = query(
+					collection(db, "conversations", conversationId, "messages"),
+					orderBy("createdAt", "asc")
+				);
+
+				const snapshot = await getDocs(messagesQuery);
+				const messages: {
+					id: string;
+					text: string;
+					timestamp: string;
+					isSent: boolean;
+				}[] = [];
+
+				snapshot.forEach((doc) => {
+					const data = doc.data();
+					messages.push({
+						id: doc.id,
+						text: data.text,
+						timestamp: new Date(data.createdAt).toLocaleTimeString("en-US", {
+							hour: "2-digit",
+							minute: "2-digit",
+							hour12: false,
+						}),
+						isSent: data.userId === userId,
+					});
+				});
+
+				return messages;
+			} catch (error) {
+				console.error("Error fetching messages:", error);
+				throw error;
+			}
+		},
+		// Subscribe to messages in real-time
+		subscribeToMessages: (
+			conversationId: string,
+			callback: (messages: {
+				id: string;
+				text: string;
+				timestamp: string;
+				isSent: boolean;
+			}[]) => void
+		): (() => void) => {
+			if (!auth.currentUser) {
+				return () => { };
+			}
+
+			const userId = auth.currentUser.uid;
+			const messagesQuery = query(
+				collection(db, "conversations", conversationId, "messages"),
+				orderBy("createdAt", "asc")
+			);
+
+			return onSnapshot(messagesQuery, (snapshot) => {
+				const messages: {
+					id: string;
+					text: string;
+					timestamp: string;
+					isSent: boolean;
+				}[] = [];
+
+				snapshot.forEach((doc) => {
+					const data = doc.data();
+					messages.push({
+						id: doc.id,
+						text: data.text,
+						timestamp: new Date(data.createdAt).toLocaleTimeString("en-US", {
+							hour: "2-digit",
+							minute: "2-digit",
+							hour12: false,
+						}),
+						isSent: data.userId === userId,
+					});
+				});
+
+				callback(messages);
+			});
+		},
+	},
+	pushTokens: {
+		/**
+		 * Save or update Expo push token for the current user.
+		 * Stores in userPushTokens/{userId} with tokens array (supports multiple devices).
+		 */
+		saveToken: async (expoPushToken: string): Promise<void> => {
+			try {
+				if (!auth.currentUser) {
+					throw new Error("User must be authenticated to save push token");
+				}
+				const userId = auth.currentUser.uid;
+				const tokenDocRef = doc(db, "userPushTokens", userId);
+				const snap = await getDoc(tokenDocRef);
+				const now = Date.now();
+				const existingTokens: string[] = snap.exists() ? (snap.data().tokens ?? []) : [];
+				const tokens = existingTokens.includes(expoPushToken)
+					? existingTokens
+					: [...existingTokens.filter(Boolean), expoPushToken];
+				await setDoc(tokenDocRef, { tokens, updatedAt: now }, { merge: true });
+			} catch (error) {
+				console.error("Error saving push token:", error);
+				throw error;
+			}
+		},
+		/**
+		 * Remove current device's push token (e.g. when user disables notifications in Settings).
+		 */
+		removeToken: async (): Promise<void> => {
+			try {
+				if (!auth.currentUser) return;
+				const userId = auth.currentUser.uid;
+				const tokenDocRef = doc(db, "userPushTokens", userId);
+				const snap = await getDoc(tokenDocRef);
+				if (!snap.exists()) return;
+				const existingTokens: string[] = snap.data().tokens ?? [];
+				// We don't have the current token here; clear all so user stops receiving
+				if (existingTokens.length === 0) return;
+				await setDoc(tokenDocRef, { tokens: [], updatedAt: Date.now() }, { merge: true });
+			} catch (error) {
+				console.error("Error removing push token:", error);
 			}
 		},
 	},

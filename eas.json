@@ -8,6 +8,7 @@
 			"developmentClient": true,
 			"distribution": "internal"
 		},
+
 		"preview": {
 			"distribution": "internal"
 		},
@@ -19,6 +20,9 @@
 			"ios": {
 				"simulator": true
 			}
+		},
+		"android-simulator": {
+			"extends": "development"
 		}
 	},
 	"submit": {

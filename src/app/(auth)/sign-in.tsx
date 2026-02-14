@@ -4,6 +4,7 @@ import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { firebaseApi } from "@/services/firebase";
 
 export default function SignIn() {
 	const { signIn } = useAuth();
@@ -12,7 +13,14 @@ export default function SignIn() {
 	const handleSignIn = async () => {
 		try {
 			setIsLoading(true);
-			await signIn();
+			const { user: firebaseUser } = await signIn();
+			if (firebaseUser) {
+				const profile = await firebaseApi.profiles.getProfile(firebaseUser.uid);
+				if (!profile) {
+					router.replace("/onboarding");
+					return;
+				}
+			}
 			router.replace("/(tabs)");
 		} catch (error: any) {
 			console.error("Sign in failed:", error);
@@ -31,8 +39,8 @@ export default function SignIn() {
 				<Text style={styles.title}>Welcome to Buddi</Text>
 				<Text style={styles.subtitle}>Connect with adventure buddies</Text>
 
-				<TouchableOpacity 
-					style={[styles.button, isLoading && styles.buttonDisabled]} 
+				<TouchableOpacity
+					style={[styles.button, isLoading && styles.buttonDisabled]}
 					onPress={handleSignIn}
 					disabled={isLoading}
 				>

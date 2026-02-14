@@ -39,6 +39,11 @@ export function SettingsDropdown({
 		}
 	};
 
+	const openSettings = () => {
+		onClose();
+		router.push("/settings");
+	};
+
 	return (
 		<Modal
 			visible={visible}
@@ -58,6 +63,10 @@ export function SettingsDropdown({
 					]}
 					onStartShouldSetResponder={() => true}
 				>
+					<TouchableOpacity style={styles.menuItem} onPress={openSettings}>
+						<Feather name="settings" size={20} color={buddiColors.textPrimary} style={styles.menuIcon} />
+						<Text style={styles.menuText}>Settings</Text>
+					</TouchableOpacity>
 					<TouchableOpacity
 						style={styles.menuItem}
 						onPress={handleLogout}

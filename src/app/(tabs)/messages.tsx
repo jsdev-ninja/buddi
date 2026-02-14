@@ -1,19 +1,113 @@
 import { CreateGroupModal } from '@/components/CreateGroupModal';
 import { SettingsDropdown } from '@/components/SettingsDropdown';
 import { buddiColors } from '@/constants/theme';
+import { useAuth } from '@/context/AuthProvider';
 import type { GroupInput } from '@/entities/group';
-import { conversations } from '@/lib/data/mockData';
 import { firebaseApi } from '@/services/firebase';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+
+type ConversationItem = {
+  id: string;
+  name: string;
+  lastMessage?: string;
+  timestamp?: string;
+  members?: number;
+  isGroup?: boolean;
+  isMatchOnly?: boolean;
+  otherUserId?: string;
+};
+
+function getConversationId(userId1: string, userId2: string): string {
+  return [userId1, userId2].sort().join('_');
+}
 
 export default function MessagesScreen() {
   const router = useRouter();
-  const hasConversations = conversations.length > 0;
+  const { user } = useAuth();
+  const [conversations, setConversations] = useState<ConversationItem[]>([]);
+  const [matches, setMatches] = useState<Array<{ matchId: string; userId: string; createdAt: number }>>([]);
+  const [matchNames, setMatchNames] = useState<Record<string, string>>({});
+  const [isLoading, setIsLoading] = useState(true);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!user?.uid) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        const [convs, userMatches] = await Promise.all([
+          firebaseApi.chat.getConversations(user.uid),
+          firebaseApi.matches.getUserMatches(user.uid),
+        ]);
+        setConversations(convs);
+        setMatches(userMatches);
+
+        const names: Record<string, string> = {};
+        await Promise.all(
+          userMatches.map(async (m) => {
+            const profile = await firebaseApi.profiles.getProfile(m.userId);
+            names[m.userId] = profile?.name || 'Unknown';
+          })
+        );
+        setMatchNames(names);
+      } catch (error) {
+        console.error('Error fetching messages data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [user?.uid]);
+
+  const conversationIds = useMemo(
+    () => new Set(conversations.map((c) => c.id)),
+    [conversations]
+  );
+
+  const matchesWithoutConversation = useMemo(() => {
+    return matches.filter((m) => {
+      const convId = getConversationId(user?.uid ?? '', m.userId);
+      return !conversationIds.has(convId);
+    });
+  }, [matches, conversationIds, user?.uid]);
+
+  const listItems: ConversationItem[] = useMemo(() => {
+    const convItems: ConversationItem[] = conversations.map((c) => ({ ...c, isMatchOnly: false }));
+    const matchOnlyItems: ConversationItem[] = matchesWithoutConversation.map((m) => ({
+      id: getConversationId(user?.uid ?? '', m.userId),
+      name: matchNames[m.userId] ?? 'Unknown',
+      isMatchOnly: true,
+      otherUserId: m.userId,
+    }));
+    return [...convItems, ...matchOnlyItems];
+  }, [conversations, matchesWithoutConversation, matchNames, user?.uid]);
+
+  const hasConversations = listItems.length > 0;
+
+  const openChat = async (item: ConversationItem) => {
+    if (!user?.uid) return;
+    if (item.isMatchOnly && item.otherUserId) {
+      try {
+        await firebaseApi.chat.createConversation([item.otherUserId], false);
+        const nameParam = encodeURIComponent(item.name);
+        router.push(`/(tabs)/chat?id=${item.id}&name=${nameParam}`);
+      } catch (error) {
+        console.error('Error creating conversation:', error);
+        Alert.alert('Error', 'Could not start chat. Please try again.');
+      }
+    } else {
+      router.push(`/(tabs)/chat?id=${item.id}`);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -53,25 +147,35 @@ export default function MessagesScreen() {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
       >
-        {hasConversations ? (
+        {isLoading ? (
+          <View style={styles.emptyState}>
+            <ActivityIndicator size="large" color={buddiColors.primary} />
+          </View>
+        ) : hasConversations ? (
           <View style={styles.conversationsList}>
-            {conversations.map((conv) => (
+            {listItems.map((item) => (
               <Pressable
-                key={conv.id}
+                key={item.id}
                 style={styles.conversationItem}
-                onPress={() => router.push(`/(tabs)/chat?id=${conv.id}`)}
+                onPress={() => openChat(item)}
               >
                 <View style={styles.conversationContent}>
-                  <Text style={styles.conversationName}>{conv.name}</Text>
-                  {conv.lastMessage && (
+                  <Text style={styles.conversationName}>{item.name}</Text>
+                  {item.isMatchOnly ? (
                     <Text style={styles.conversationLastMessage} numberOfLines={1}>
-                      {conv.lastMessage}
+                      Match — tap to say hi
                     </Text>
-                  )}
+                  ) : item.lastMessage ? (
+                    <Text style={styles.conversationLastMessage} numberOfLines={1}>
+                      {item.lastMessage}
+                    </Text>
+                  ) : null}
                 </View>
-                {conv.timestamp && (
-                  <Text style={styles.conversationTime}>{conv.timestamp}</Text>
-                )}
+                {item.isMatchOnly ? (
+                  <Feather name="message-circle" size={20} color={buddiColors.primary} />
+                ) : item.timestamp ? (
+                  <Text style={styles.conversationTime}>{item.timestamp}</Text>
+                ) : null}
               </Pressable>
             ))}
           </View>

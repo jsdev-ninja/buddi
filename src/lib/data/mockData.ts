@@ -11,6 +11,7 @@ export type TravelerProfile = {
   verified: boolean;
   interests: string[];
   adventurePlan?: string;
+  gender?: string;
 };
 
 export type AdventureGroup = {
@@ -25,6 +26,7 @@ export type AdventureGroup = {
   maxMembers: number;
   tags: string[];
   activityType: string;
+  difficulty?: string;
 };
 
 export const travelerCards: TravelerProfile[] = [

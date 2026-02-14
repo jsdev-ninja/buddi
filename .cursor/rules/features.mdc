@@ -1,0 +1,17 @@
+---
+alwaysApply: true
+---
+
+1. sign in/ sign up with google
+2. edit profile info
+3. create group
+4. edit group
+5. user can remove own groups
+6. user can browser other groups and users with filter
+7. filter
+8. user can like group or user
+9. if user like person who like him is match
+10.   user can see matches
+11.   user can see who like him
+12.   user can chat with matches users and groups
+13.   dislike profile should return after 1 days

@@ -1,13 +1,36 @@
 import { HapticTab } from '@/components/haptic-tab';
 import { Colors, buddiColors } from '@/constants/theme';
+import { useAuth } from '@/context/AuthProvider';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useNotificationBadges } from '@/hooks/useNotificationBadges';
 import { Feather } from '@expo/vector-icons';
-import { Tabs } from 'expo-router';
-import React from 'react';
+import { Tabs, router } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
+import { firebaseApi } from '@/services/firebase';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const { user } = useAuth();
+  const [profileChecked, setProfileChecked] = useState(false);
+  const { messagesBadge, matchesBadge } = useNotificationBadges();
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    firebaseApi.profiles.getProfile(user.uid).then((profile) => {
+      if (cancelled) return;
+      setProfileChecked(true);
+      if (!profile) {
+        router.replace('/onboarding');
+      }
+    });
+    return () => { cancelled = true; };
+  }, [user]);
+
+  if (user && !profileChecked) {
+    return null; // or a small loading state while checking profile
+  }
 
   return (
     <Tabs
@@ -63,6 +86,7 @@ export default function TabLayout() {
         options={{
           title: 'Messages',
           tabBarIcon: ({ color }) => <Feather name="message-circle" size={24} color={color} />,
+          tabBarBadge: messagesBadge > 0 ? messagesBadge : undefined,
         }}
       />
       <Tabs.Screen
@@ -70,6 +94,7 @@ export default function TabLayout() {
         options={{
           title: 'Matches',
           tabBarIcon: ({ color }) => <Feather name="heart" size={24} color={color} />,
+          tabBarBadge: matchesBadge > 0 ? matchesBadge : undefined,
         }}
       />
       <Tabs.Screen

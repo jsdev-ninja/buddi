@@ -1,130 +1,97 @@
-import { authLoadingAtom, storage, userAtom } from "@/lib/atoms/user";
 import { firebaseApi } from "@/services/firebase";
-import { Provider, useAtom, useSetAtom } from "jotai";
-import { useEffect } from "react";
+import { User } from "@firebase/auth";
+import { createContext, useContext, useEffect, useReducer } from "react";
+
+const initialState = {
+	user: null,
+	isLoading: false,
+};
+
+const reducer = (state: typeof initialState, action: any) => {
+	switch (action.type) {
+		case "SET_USER":
+			return { ...state, user: action.payload };
+		case "SET_LOADING":
+			return { ...state, isLoading: action.payload };
+	}
+
+	return state;
+};
+
+const AuthContext = createContext<{
+	user: User | null;
+	isLoading: boolean;
+	signIn: () => Promise<{ user: User | null; isNewUser: boolean }>;
+	signOut: () => Promise<void>;
+}>({
+	user: null,
+	isLoading: false,
+	signIn: async () => { return { user: null, isNewUser: false } },
+	signOut: async () => { },
+});
 
 // Hook to use authentication
 export function useAuth() {
-	const [user] = useAtom(userAtom);
-	const [isLoading] = useAtom(authLoadingAtom);
-	const setUserAtom = useSetAtom(userAtom);
-	const setLoadingAtom = useSetAtom(authLoadingAtom);
+	return useContext(AuthContext!);
+}
 
-	const signIn = async () => {
+
+
+// Main Auth Provider component
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+
+	const [state, dispatch] = useReducer(reducer, initialState);
+
+	const signIn = async (): Promise<{ user: User | null; isNewUser: boolean }> => {
 		try {
-			setLoadingAtom(true);
+			dispatch({ type: "SET_LOADING", payload: true });
 			// Use real Firebase Google sign-in
 			const { user: firebaseUser, isNewUser } = await firebaseApi.auth.loginWithGoogle();
 			console.log("isNewUser", isNewUser);
-			if (firebaseUser) {
-				setUserAtom(firebaseUser);
-				// Persist to storage
-				await storage.setItem("user", JSON.stringify(firebaseUser));
+			dispatch({ type: "SET_USER", payload: firebaseUser });
 
-				// Create empty profile if user doesn't have one
-				try {
-					const existingProfile = await firebaseApi.profiles.getProfile(firebaseUser.uid);
-					if (!existingProfile) {
-						console.log("Creating empty profile for new user");
-						await firebaseApi.profiles.create();
-					}
-				} catch (profileError) {
-					console.error("Error checking/creating profile:", profileError);
-					// Don't throw - profile creation failure shouldn't block sign-in
-				}
+			return {
+				user: firebaseUser ?? null,
+				isNewUser,
 			}
 		} catch (error) {
 			console.error("Sign in error:", error);
-			throw error;
+			return {
+				user: null,
+				isNewUser: false,
+			}
 		} finally {
-			setLoadingAtom(false);
+			dispatch({ type: "SET_LOADING", payload: false });
+
 		}
 	};
 
 	const signOut = async () => {
 		try {
-			setLoadingAtom(true);
-			// Use real Firebase sign out
+			dispatch({ type: "SET_LOADING", payload: true });
 			await firebaseApi.auth.signOut();
-			// Clear user
-			setUserAtom(null);
-			// Remove from storage
-			await storage.removeItem("user");
+			dispatch({ type: "SET_USER", payload: null });
 		} catch (error) {
 			console.error("Sign out error:", error);
 			throw error;
-		} finally {
-			setLoadingAtom(false);
 		}
 	};
 
-	return {
-		user,
-		isLoading,
-		signIn,
-		signOut,
-	};
-}
-
-// Component to initialize auth state
-function AuthInitializer({ children }: { children: React.ReactNode }) {
-	const setUser = useSetAtom(userAtom);
-	const setIsLoading = useSetAtom(authLoadingAtom);
 
 	useEffect(() => {
-		let mounted = true;
-
-		// Set initial loading state
-		setIsLoading(true);
-
-		// Set up Firebase auth state listener
-		const unsubscribe = firebaseApi.auth.onAuthStateChanged(async (firebaseUser) => {
-			if (!mounted) return;
-
-			console.log("firebaseUser", firebaseUser);
-
-			if (firebaseUser) {
-				setUser(firebaseUser);
-				// Sync to storage
-				storage.setItem("user", JSON.stringify(firebaseUser)).catch(() => {
-					// Ignore errors
-				});
-
-				// Create empty profile if user doesn't have one
-				try {
-					const existingProfile = await firebaseApi.profiles.getProfile(firebaseUser.uid);
-					if (!existingProfile) {
-						console.log("Creating empty profile for user");
-						await firebaseApi.profiles.create();
-					}
-				} catch (profileError) {
-					console.error("Error checking/creating profile:", profileError);
-					// Don't throw - profile creation failure shouldn't block auth state
-				}
-			} else {
-				setUser(null);
-				// Remove from storage
-				storage.removeItem("user").catch(() => {
-					// Ignore errors
-				});
-			}
-			setIsLoading(false);
+		firebaseApi.auth.onAuthStateChanged((user) => {
+			dispatch({ type: "SET_USER", payload: user });
 		});
+	}, []);
 
-		return () => {
-			mounted = false;
-			unsubscribe();
-		};
-	}, [setUser, setIsLoading]);
-
-	return <>{children}</>;
-}
-
-// Main Auth Provider component
-export function AuthProvider({ children }: { children: React.ReactNode }) {
 	return (
-		<Provider>
-			<AuthInitializer>{children}</AuthInitializer>
-		</Provider>
+		<AuthContext.Provider value={{
+			user: state.user,
+			isLoading: state.isLoading,
+			signIn,
+			signOut,
+		}}>
+			{children}
+		</AuthContext.Provider>
 	);
 }

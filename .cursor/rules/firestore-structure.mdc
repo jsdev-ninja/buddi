@@ -1,0 +1,78 @@
+---
+alwaysApply: true
+---
+
+# Firestore Database Structure
+
+## Collections Overview
+
+1. **profiles** - User profile information
+   - Document ID: Auto-generated
+   - Key fields: userId (indexed), type: "profile", name, age, location, photos[], interests[], verified
+   - Indexes: userId, type, createdAt
+
+2. **groups** - Adventure/group information
+   - Document ID: Auto-generated
+   - Key fields: userId (creator, indexed), privacy: "public"|"private", groupName, destination, activityType, participants[]
+   - Indexes: userId+createdAt, privacy+createdAt
+
+3. **profileLikes** - User likes on profiles
+   - Document ID: {userId}_{profileId}
+   - Key fields: userId, profileId, likedUserId, createdAt, type: "like"
+   - Indexes: userId, profileId, likedUserId, userId+createdAt
+
+4. **groupLikes** - User likes on groups
+   - Document ID: {userId}_{groupId}
+   - Key fields: userId, groupId, createdAt, type: "like"
+   - Indexes: userId, groupId, userId+createdAt
+
+5. **profileHides** - Hidden profiles (7-day expiry)
+   - Document ID: {userId}_{profileId}
+   - Key fields: userId, profileId, hideUntil, createdAt
+   - Indexes: userId, userId+hideUntil
+
+6. **groupHides** - Hidden groups (7-day expiry)
+   - Document ID: {userId}_{groupId}
+   - Key fields: userId, groupId, hideUntil, createdAt
+   - Indexes: userId, userId+hideUntil
+
+7. **matches** - Mutual likes between users
+   - Document ID: {user1Id}_{user2Id} (sorted alphabetically)
+   - Key fields: user1Id, user2Id, createdAt, type: "profile"
+   - Indexes: user1Id, user2Id, user1Id+createdAt, user2Id+createdAt
+
+8. **conversations** - Chat conversations
+   - Document ID: {userId1}_{userId2} (1-on-1) or group_{groupId} (group)
+   - Key fields: participants[], isGroup, groupId?, groupName?, updatedAt, lastMessage, lastMessageAt
+   - Subcollection: messages (userId, text, createdAt)
+   - Indexes: participants (array-contains), participants+updatedAt
+
+## Key Design Principles
+
+- Composite document IDs prevent duplicates (likes, hides, matches)
+- All timestamps use Date.now() (number type)
+- Users can only read/write their own data (enforced by security rules)
+- Likes and matches are immutable once created
+- Hides expire after 7 days (hideUntil timestamp)
+
+## Security Rules Summary
+
+- profiles: Read all, write own
+- groups: Read all, write own
+- profileLikes/groupLikes: Read own, create own, immutable
+- profileHides/groupHides: Read/manage own
+- matches: Read own, create if participant, immutable
+- conversations: Read/write if participant
+- messages: Read/write if conversation participant
+
+## Required Indexes (9 total)
+
+1. groups: userId + createdAt (ASC + DESC)
+2. groups: privacy + createdAt (ASC + DESC)
+3. profileLikes: userId + createdAt (ASC + DESC)
+4. groupLikes: userId + createdAt (ASC + DESC)
+5. profileHides: userId + hideUntil (ASC + ASC)
+6. groupHides: userId + hideUntil (ASC + ASC)
+7. matches: user1Id + createdAt (ASC + DESC)
+8. matches: user2Id + createdAt (ASC + DESC)
+9. conversations: participants (array) + updatedAt (DESC)

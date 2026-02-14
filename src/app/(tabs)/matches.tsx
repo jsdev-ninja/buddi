@@ -1,17 +1,183 @@
 import { SettingsDropdown } from '@/components/SettingsDropdown';
 import { buddiColors } from '@/constants/theme';
+import { useAuth } from '@/context/AuthProvider';
+import type { Profile } from '@/entities/profile';
+import { Card } from '@/lib/components/Card';
+import { firebaseApi } from '@/services/firebase';
 import { Feather } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 type TabType = 'likesYou' | 'matches';
 
+function getConversationId(userId1: string, userId2: string): string {
+  return [userId1, userId2].sort().join('_');
+}
+
+function ProfileCard({
+  profile,
+  onPress,
+  actionLabel,
+  onPass,
+  onLike,
+}: {
+  profile: Profile;
+  onPress: () => void;
+  actionLabel?: string;
+  onPass?: () => void;
+  onLike?: () => void;
+}) {
+  const photoUri = profile.photos?.[0] ?? profile.profilePhoto;
+  const source = photoUri ? { uri: photoUri } : require('@/assets/images/react-logo.png');
+  const showActions = onPass != null && onLike != null;
+
+  return (
+    <View style={styles.cardWrapper}>
+      <Pressable onPress={onPress} style={styles.profileCardPressable}>
+        <Card style={styles.profileCard}>
+          <View style={styles.travelerPhotoSection}>
+            <Image source={source} style={styles.travelerPhoto} resizeMode="cover" />
+            <LinearGradient
+              colors={['transparent', 'rgba(0,0,0,0.7)']}
+              style={styles.travelerPhotoGradient}
+            >
+              <View style={styles.profileOverlay}>
+                <Text style={styles.profileName}>
+                  {profile.name || 'Unknown'}
+                  {profile.age && profile.age > 0 ? `, ${profile.age}` : ''}
+                </Text>
+                {(profile.location || profile.locationFlag) && (
+                  <View style={styles.locationRow}>
+                    <Feather name="map-pin" size={14} color={buddiColors.textOnDark} />
+                    <Text style={styles.locationText}>
+                      {profile.location || ''}
+                      {profile.locationFlag ? ` ${profile.locationFlag}` : ''}
+                    </Text>
+                  </View>
+                )}
+                {actionLabel && !showActions && (
+                  <View style={styles.cardActionRow}>
+                    <Feather name="message-circle" size={16} color={buddiColors.textOnDark} />
+                    <Text style={styles.cardActionText}>{actionLabel}</Text>
+                  </View>
+                )}
+                {showActions && (
+                  <View style={styles.cardActionsOverlay}>
+                    <Pressable
+                      style={styles.passButton}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        onPass();
+                      }}
+                      accessibilityLabel="Pass"
+                    >
+                      <Feather name="x" size={28} color={buddiColors.dangerText} />
+                    </Pressable>
+                    <Pressable
+                      style={styles.likeButton}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        onLike();
+                      }}
+                      accessibilityLabel="Like"
+                    >
+                      <Feather name="heart" size={28} color={buddiColors.textOnDark} />
+                    </Pressable>
+                  </View>
+                )}
+              </View>
+            </LinearGradient>
+          </View>
+        </Card>
+      </Pressable>
+    </View>
+  );
+}
+
 export default function MatchesScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('likesYou');
   const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
-  const hasLikes = false; // Set to true when there are likes
+  const [likesReceived, setLikesReceived] = useState<string[]>([]);
+  const [matches, setMatches] = useState<Array<{ matchId: string; userId: string; createdAt: number }>>([]);
+  const [likesProfiles, setLikesProfiles] = useState<Profile[]>([]);
+  const [matchProfiles, setMatchProfiles] = useState<Profile[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!user?.uid) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        const [likes, userMatches] = await Promise.all([
+          firebaseApi.matches.getLikesReceived(user.uid),
+          firebaseApi.matches.getUserMatches(user.uid),
+        ]);
+        setLikesReceived(likes);
+        setMatches(userMatches);
+
+        const [fetchedLikesProfiles, fetchedMatchProfiles] = await Promise.all([
+          Promise.all(likes.map((uid) => firebaseApi.profiles.getProfile(uid))),
+          Promise.all(userMatches.map((m) => firebaseApi.profiles.getProfile(m.userId))),
+        ]);
+        setLikesProfiles(fetchedLikesProfiles.filter((p): p is Profile => p != null));
+        setMatchProfiles(fetchedMatchProfiles.filter((p): p is Profile => p != null));
+      } catch (error) {
+        console.error('Error fetching matches data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [user?.uid]);
+
+  const hasLikes = likesProfiles.length > 0;
+  const hasMatches = matchProfiles.length > 0;
+
+  const openChatWithMatch = async (otherUserId: string, name: string) => {
+    if (!user?.uid) return;
+    try {
+      await firebaseApi.chat.createConversation([otherUserId], false);
+      const conversationId = getConversationId(user.uid, otherUserId);
+      const nameParam = encodeURIComponent(name);
+      router.push(`/(tabs)/chat?id=${conversationId}&name=${nameParam}`);
+    } catch (error) {
+      console.error('Error creating conversation:', error);
+      Alert.alert('Error', 'Could not start chat. Please try again.');
+    }
+  };
+
+  const handleLikeBack = async (profileId: string) => {
+    if (!user?.uid) return;
+    try {
+      await firebaseApi.likes.likeProfile(profileId);
+      setLikesProfiles((prev) => prev.filter((p) => p.id !== profileId));
+      setLikesReceived((prev) => prev.filter((id) => id !== profileId));
+    } catch (error) {
+      console.error('Error liking back:', error);
+      Alert.alert('Error', 'Could not like. Please try again.');
+    }
+  };
+
+  const handlePassOnLike = async (profileId: string) => {
+    if (!user?.uid) return;
+    try {
+      await firebaseApi.likes.dislikeProfile(profileId);
+      setLikesProfiles((prev) => prev.filter((p) => p.id !== profileId));
+      setLikesReceived((prev) => prev.filter((id) => id !== profileId));
+    } catch (error) {
+      console.error('Error passing:', error);
+      Alert.alert('Error', 'Could not pass. Please try again.');
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -57,28 +223,89 @@ export default function MatchesScreen() {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
       >
-        {hasLikes ? (
-          // Likes list would go here
-          <View />
-        ) : (
-          // Empty State
+        {isLoading ? (
           <View style={styles.emptyState}>
-            <View style={styles.emptyIcon}>
-              <Feather name="heart" size={80} color={buddiColors.surfaceBorder} />
-            </View>
-            <Text style={styles.emptyTitle}>
-              No new likes or group requests yet.
-            </Text>
-            <Text style={styles.emptySubtitle}>
-              People who like you or want to join your groups will appear here. Get exploring!
-            </Text>
-            <Pressable 
-              style={styles.discoverButton}
-              onPress={() => router.push('/(tabs)/index')}
-            >
-              <Text style={styles.discoverButtonText}>Discover People</Text>
-            </Pressable>
+            <ActivityIndicator size="large" color={buddiColors.primary} />
           </View>
+        ) : activeTab === 'likesYou' ? (
+          hasLikes ? (
+            <View style={styles.listContainer}>
+              <View style={styles.sectionHeader}>
+                <Feather name="heart" size={22} color={buddiColors.primary} />
+                <Text style={styles.sectionTitle}>
+                  People Who Liked You ({likesProfiles.length})
+                </Text>
+              </View>
+              <View style={styles.cardsList}>
+                {likesProfiles.map((profile) => (
+                  <ProfileCard
+                    key={profile.id}
+                    profile={profile}
+                    onPress={() => {}}
+                    onPass={() => handlePassOnLike(profile.id)}
+                    onLike={() => handleLikeBack(profile.id)}
+                  />
+                ))}
+              </View>
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <View style={styles.emptyIcon}>
+                <Feather name="heart" size={80} color={buddiColors.surfaceBorder} />
+              </View>
+              <Text style={styles.emptyTitle}>
+                No new likes yet.
+              </Text>
+              <Text style={styles.emptySubtitle}>
+                People who like you will appear here. Get exploring!
+              </Text>
+              <Pressable 
+                style={styles.discoverButton}
+                onPress={() => router.push('/(tabs)/index')}
+              >
+                <Text style={styles.discoverButtonText}>Discover People</Text>
+              </Pressable>
+            </View>
+          )
+        ) : (
+          hasMatches ? (
+            <View style={styles.listContainer}>
+              <View style={styles.sectionHeader}>
+                <Feather name="heart" size={22} color={buddiColors.primary} />
+                <Text style={styles.sectionTitle}>
+                  Your Matches ({matchProfiles.length})
+                </Text>
+              </View>
+              <View style={styles.cardsList}>
+                {matchProfiles.map((profile) => (
+                  <ProfileCard
+                    key={profile.id}
+                    profile={profile}
+                    onPress={() => openChatWithMatch(profile.userId, profile.name || 'Unknown')}
+                    actionLabel="Message"
+                  />
+                ))}
+              </View>
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <View style={styles.emptyIcon}>
+                <Feather name="heart" size={80} color={buddiColors.surfaceBorder} />
+              </View>
+              <Text style={styles.emptyTitle}>
+                No matches yet.
+              </Text>
+              <Text style={styles.emptySubtitle}>
+                Start liking people to see your matches here!
+              </Text>
+              <Pressable 
+                style={styles.discoverButton}
+                onPress={() => router.push('/(tabs)/index')}
+              >
+                <Text style={styles.discoverButtonText}>Discover People</Text>
+              </Pressable>
+            </View>
+          )
         )}
       </ScrollView>
     </View>
@@ -185,5 +412,107 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: buddiColors.textOnDark,
+  },
+  listContainer: {
+    padding: 20,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: buddiColors.textPrimary,
+  },
+  profileCardPressable: {
+    width: '100%',
+  },
+  cardsList: {
+    gap: 16,
+  },
+  cardWrapper: {
+    marginBottom: 16,
+  },
+  profileCard: {
+    width: '100%',
+    borderRadius: 24,
+    overflow: 'hidden',
+    padding: 0,
+  },
+  travelerPhotoSection: {
+    width: '100%',
+    aspectRatio: 3 / 4,
+    minHeight: 280,
+    position: 'relative',
+    backgroundColor: buddiColors.surfaceMuted,
+  },
+  travelerPhoto: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
+  travelerPhotoGradient: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'flex-end',
+  },
+  profileOverlay: {
+    padding: 20,
+    paddingBottom: 24,
+  },
+  profileName: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: buddiColors.textOnDark,
+    marginBottom: 6,
+    textTransform: 'capitalize',
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  locationText: {
+    fontSize: 15,
+    color: buddiColors.textOnDark,
+    textTransform: 'capitalize',
+  },
+  cardActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 10,
+  },
+  cardActionText: {
+    fontSize: 15,
+    color: buddiColors.textOnDark,
+    fontWeight: '600',
+  },
+  cardActionsOverlay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 32,
+    marginTop: 20,
+  },
+  passButton: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 2,
+    borderColor: buddiColors.dangerText,
+    backgroundColor: buddiColors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  likeButton: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: buddiColors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

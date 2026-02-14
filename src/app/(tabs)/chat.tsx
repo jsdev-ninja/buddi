@@ -1,28 +1,125 @@
 import { buddiColors } from '@/constants/theme';
-import type { ChatMessage } from '@/lib/data/mockData';
-import { chatMessages, conversations } from '@/lib/data/mockData';
+import { useAuth } from '@/context/AuthProvider';
+import { firebaseApi } from '@/services/firebase';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Keyboard,
+  KeyboardAvoidingView,
+  LayoutAnimation,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+// Chat screen best practices (React Native, Stream, GetStream, keyboard-controller):
+// - KeyboardAvoidingView with behavior on both iOS (padding) and Android (height)
+// - keyboardVerticalOffset from actual header height (safe area + headers), not hardcoded
+// - Keyboard listeners for scroll padding and scroll-to-end when keyboard opens
+// - keyboardShouldPersistTaps="handled" so taps on input/buttons don't dismiss keyboard
+// - keyboardDismissMode: interactive (iOS) / on-drag (Android)
+// - LayoutAnimation when keyboard shows for smoother transitions
+// - For 100+ messages, consider FlatList (virtualization); avoid inverted+reverse together
+
+type ChatMessage = {
+  id: string;
+  text: string;
+  timestamp: string;
+  isSent: boolean;
+};
 
 export default function ChatScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { user } = useAuth();
+  const params = useLocalSearchParams<{ id: string; name?: string }>();
+  const id = typeof params.id === 'string' ? params.id : params.id?.[0];
+  const nameParam = typeof params.name === 'string' ? params.name : params.name?.[0];
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [chatName, setChatName] = useState(nameParam ? decodeURIComponent(nameParam) : 'Chat');
+  const [members, setMembers] = useState(1);
+  const [isLoading, setIsLoading] = useState(true);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const scrollViewRef = useRef<ScrollView>(null);
-  
-  const conversation = id ? conversations.find(c => c.id === id) : null;
-  const chatName = conversation?.name || 'Chat';
-  const members = conversation?.members || 1;
+  const insets = useSafeAreaInsets();
 
-  // Initialize messages from mockData
+  // Header heights: app header (~120) + chat header (~60)
+  const headerHeight = 120 + 60;
+  const keyboardVerticalOffset = insets.top + headerHeight;
+
+  // Track keyboard: add bottom padding, scroll to end, and animate layout (best practice)
   useEffect(() => {
-    if (id) {
-      setMessages(chatMessages[id] || []);
-    }
-  }, [id]);
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        if (Platform.OS === 'ios') {
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        }
+        setKeyboardHeight(e.endCoordinates.height);
+        setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+      }
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        if (Platform.OS === 'ios') {
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        }
+        setKeyboardHeight(0);
+      }
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  // Fetch conversation and messages from Firebase
+  useEffect(() => {
+    if (!id || !user?.uid) return;
+
+    const fetchConversation = async () => {
+      try {
+        setIsLoading(true);
+        const conversations = await firebaseApi.chat.getConversations(user.uid);
+        const conversation = conversations.find((c) => c.id === id);
+
+        if (conversation) {
+          setChatName(conversation.name);
+          setMembers(conversation.members || 1);
+        } else {
+          const conv = await firebaseApi.chat.getConversation(id, user.uid);
+          if (conv) {
+            setChatName(conv.name);
+            setMembers(conv.participants.length);
+          }
+        }
+
+        const fetchedMessages = await firebaseApi.chat.getMessages(id);
+        setMessages(fetchedMessages);
+      } catch (error) {
+        console.error('Error fetching conversation:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchConversation();
+
+    const unsubscribe = firebaseApi.chat.subscribeToMessages(id, (updatedMessages) => {
+      setMessages(updatedMessages);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [id, user?.uid]);
 
   // Scroll to bottom when new messages are added
   useEffect(() => {
@@ -33,32 +130,22 @@ export default function ChatScreen() {
     }
   }, [messages]);
 
-  const handleSend = () => {
-    if (message.trim() && id) {
-      const newMessage: ChatMessage = {
-        id: `msg-${Date.now()}`,
-        text: message.trim(),
-        timestamp: new Date().toLocaleTimeString('en-US', { 
-          hour: '2-digit', 
-          minute: '2-digit',
-          hour12: false 
-        }),
-        isSent: true,
-      };
-      
-      // Add message to state
-      setMessages(prev => [...prev, newMessage]);
-      
-      // Clear input
+  const handleSend = async () => {
+    if (!message.trim() || !id) return;
+
+    try {
+      await firebaseApi.chat.sendMessage(id, message.trim());
       setMessage('');
+    } catch (error) {
+      console.error('Error sending message:', error);
     }
   };
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? keyboardVerticalOffset : 0}
     >
       {/* Header */}
       <View style={styles.header}>
@@ -92,11 +179,16 @@ export default function ChatScreen() {
       </View>
 
       {/* Messages Area */}
-      <ScrollView 
+      <ScrollView
         ref={scrollViewRef}
         style={styles.messagesArea}
-        contentContainerStyle={styles.messagesContent}
+        contentContainerStyle={[
+          styles.messagesContent,
+          { paddingBottom: 8 + keyboardHeight },
+        ]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
       >
         {messages.map((msg) => (
           <View
