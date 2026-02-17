@@ -14,6 +14,7 @@ import type { AdventureGroup, TravelerProfile } from '@/lib/data/mockData';
 import { firebaseApi } from '@/services/firebase';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,6 +25,7 @@ type CombinedCard =
 
 export default function DiscoverScreen() {
   const { user } = useAuth();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const [index, setIndex] = useState(0);
   const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
@@ -33,9 +35,7 @@ export default function DiscoverScreen() {
   const [groups, setGroups] = useState<AdventureGroup[]>([]);
   const [isLoadingProfiles, setIsLoadingProfiles] = useState(true);
 
-  // Fetch profiles and groups from Firestore
-  useEffect(() => {
-    const fetchData = async () => {
+  const fetchData = React.useCallback(async () => {
       if (!user?.uid) {
         setProfiles([]);
         setGroups([]);
@@ -109,10 +109,11 @@ export default function DiscoverScreen() {
       } finally {
         setIsLoadingProfiles(false);
       }
-    };
-
-    fetchData();
   }, [user?.uid]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const cards = useMemo<CombinedCard[]>(() => {
     let filteredProfiles = profiles;
@@ -208,6 +209,9 @@ export default function DiscoverScreen() {
           <Pressable onPress={handleUndo} style={styles.iconButton}>
             <Feather name="rotate-ccw" size={20} color={buddiColors.textSecondary} />
           </Pressable>
+          <Pressable onPress={() => fetchData()} style={styles.iconButton} accessibilityLabel="Refresh">
+            <Feather name="refresh-cw" size={20} color={buddiColors.textSecondary} />
+          </Pressable>
           <Pressable
             onPress={() => setShowFilterModal(true)}
             style={[styles.iconButton, styles.filterButton]}
@@ -264,8 +268,11 @@ export default function DiscoverScreen() {
             <Card style={styles.mainCard}>
               {current.type === 'traveler' ? (
                 <>
-                  {/* Profile photo (top ~2/3) with gradient overlay for name/location */}
-                  <View style={styles.travelerPhotoSection}>
+                  {/* Profile photo - tap to view full profile */}
+                  <Pressable
+                    style={styles.travelerPhotoSection}
+                    onPress={() => router.push(`/view-profile/${current.data.id}` as any)}
+                  >
                     <Image
                       source={current.data.profilePhoto}
                       style={styles.travelerPhoto}
@@ -288,9 +295,10 @@ export default function DiscoverScreen() {
                             </Text>
                           </View>
                         )}
+                        <Text style={styles.viewProfileHint}>Tap to view profile</Text>
                       </View>
                     </LinearGradient>
-                  </View>
+                  </Pressable>
 
                   {/* White section: Pass and Like buttons only */}
                   <View style={styles.travelerActionsSection}>
@@ -519,6 +527,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: buddiColors.textOnDark,
     textTransform: 'capitalize',
+  },
+  viewProfileHint: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 6,
   },
   travelerActionsSection: {
     flexDirection: 'row',

@@ -7,11 +7,13 @@ import { Card } from '@/lib/components/Card';
 import { firebaseApi } from '@/services/firebase';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 export default function ProfileScreen() {
   const { user } = useAuth();
+  const router = useRouter();
   const [showInterests, setShowInterests] = useState(true);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
@@ -260,8 +262,9 @@ export default function ProfileScreen() {
           <Text style={styles.editAdventureText}>Edit Adventure Plan</Text>
         </Pressable>
 
-        {/* Buddi Premium Card */}
-        <Card style={styles.premiumCard}>
+        {/* Buddi Premium Card - tap to open Premium screen */}
+        <Pressable onPress={() => router.push('/premium' as any)}>
+          <Card style={styles.premiumCard}>
           <View style={styles.premiumContent}>
             <View style={styles.premiumLeft}>
               <View style={styles.premiumIconContainer}>
@@ -292,6 +295,7 @@ export default function ProfileScreen() {
             </View>
           </View>
         </Card>
+        </Pressable>
       </ScrollView>
 
       <EditProfileModal

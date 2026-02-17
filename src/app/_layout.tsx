@@ -27,6 +27,14 @@ function RootNavigator() {
 						options={{ headerShown: false }}
 					/>
 					<Stack.Screen
+						name="view-profile/[id]"
+						options={{ headerShown: false }}
+					/>
+					<Stack.Screen
+						name="premium"
+						options={{ headerShown: false }}
+					/>
+					<Stack.Screen
 						name="onboarding/index"
 						options={{ headerShown: false, gestureEnabled: false }}
 					/>

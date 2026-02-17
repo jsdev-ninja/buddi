@@ -5,6 +5,8 @@ import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Keyboard,
   KeyboardAvoidingView,
   LayoutAnimation,
@@ -44,6 +46,9 @@ export default function ChatScreen() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatName, setChatName] = useState(nameParam ? decodeURIComponent(nameParam) : 'Chat');
   const [members, setMembers] = useState(1);
+  const [isGroupChat, setIsGroupChat] = useState(false);
+  const [otherUserId, setOtherUserId] = useState<string | null>(null);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const scrollViewRef = useRef<ScrollView>(null);
@@ -93,11 +98,21 @@ export default function ChatScreen() {
         if (conversation) {
           setChatName(conversation.name);
           setMembers(conversation.members || 1);
+          setIsGroupChat(conversation.isGroup ?? false);
+          if (!conversation.isGroup && conversation.participantIds?.length >= 2) {
+            const other = conversation.participantIds.find((p: string) => p !== user.uid);
+            setOtherUserId(other ?? null);
+          }
         } else {
           const conv = await firebaseApi.chat.getConversation(id, user.uid);
           if (conv) {
             setChatName(conv.name);
             setMembers(conv.participants.length);
+            setIsGroupChat(conv.isGroup);
+            if (!conv.isGroup && conv.participants.length >= 2) {
+              const other = conv.participants.find((p: string) => p !== user.uid);
+              setOtherUserId(other ?? null);
+            }
           }
         }
 
@@ -173,12 +188,61 @@ export default function ChatScreen() {
             <View style={styles.onlineDot} />
           </View>
         </View>
-        <Pressable onPress={() => {}}>
+        <Pressable onPress={() => setShowMoreMenu(true)}>
           <Feather name="more-vertical" size={24} color={buddiColors.textPrimary} />
         </Pressable>
       </View>
 
+      {/* More menu modal (Unmatch for 1-1) */}
+      {showMoreMenu && (
+        <Pressable style={styles.moreMenuOverlay} onPress={() => setShowMoreMenu(false)}>
+          <View style={styles.moreMenuBox} onStartShouldSetResponder={() => true}>
+            {!isGroupChat && otherUserId && (
+              <Pressable
+                style={styles.moreMenuItem}
+                onPress={() => {
+                  setShowMoreMenu(false);
+                  Alert.alert(
+                    'Unmatch',
+                    'Remove this match? You will no longer see each other in matches.',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Unmatch',
+                        style: 'destructive',
+                        onPress: async () => {
+                          try {
+                            await firebaseApi.matches.unmatch(otherUserId);
+                            router.back();
+                          } catch {
+                            Alert.alert('Error', 'Could not unmatch.');
+                          }
+                        },
+                      },
+                    ]
+                  );
+                }}
+              >
+                <Feather name="user-x" size={20} color={buddiColors.dangerText} />
+                <Text style={styles.moreMenuUnmatchText}>Unmatch</Text>
+              </Pressable>
+            )}
+            {isGroupChat && (
+              <Text style={styles.moreMenuPlaceholder}>Group options coming soon</Text>
+            )}
+            {!isGroupChat && !otherUserId && (
+              <Text style={styles.moreMenuPlaceholder}>No actions</Text>
+            )}
+          </View>
+        </Pressable>
+      )}
+
       {/* Messages Area */}
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={buddiColors.primary} />
+        </View>
+      ) : (
       <ScrollView
         ref={scrollViewRef}
         style={styles.messagesArea}
@@ -224,6 +288,7 @@ export default function ChatScreen() {
           </View>
         ))}
       </ScrollView>
+      )}
 
       {/* Input Area */}
       <View style={styles.inputContainer}>
@@ -323,6 +388,47 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: buddiColors.badgeHighlight,
     marginLeft: 4,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  moreMenuOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+    paddingTop: 100,
+    paddingRight: 20,
+  },
+  moreMenuBox: {
+    backgroundColor: buddiColors.surface,
+    borderRadius: 12,
+    padding: 8,
+    minWidth: 160,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  moreMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  moreMenuUnmatchText: {
+    fontSize: 16,
+    color: buddiColors.dangerText,
+    fontWeight: '500',
+  },
+  moreMenuPlaceholder: {
+    fontSize: 14,
+    color: buddiColors.textSecondary,
+    padding: 16,
   },
   messagesArea: {
     flex: 1,

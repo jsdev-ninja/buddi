@@ -17,6 +17,7 @@ import {
 import {
 	addDoc,
 	collection,
+	deleteDoc,
 	doc,
 	getDoc,
 	getDocs,
@@ -855,6 +856,31 @@ export const firebaseApi = {
 				console.error("Error fetching matches:", error);
 				throw error;
 			}
+		},
+		// Unmatch: remove match between current user and other user
+		unmatch: async (otherUserId: string): Promise<void> => {
+			try {
+				if (!auth.currentUser) {
+					throw new Error("User must be authenticated to unmatch");
+				}
+				const userId = auth.currentUser.uid;
+				const matchId = userId < otherUserId ? `${userId}_${otherUserId}` : `${otherUserId}_${userId}`;
+				const matchRef = doc(db, "matches", matchId);
+				const snapshot = await getDoc(matchRef);
+				if (snapshot.exists()) {
+					await deleteDoc(matchRef);
+				}
+			} catch (error) {
+				console.error("Error unmatching:", error);
+				throw error;
+			}
+		},
+		// Get match id between two users (if any)
+		getMatchId: async (userId: string, otherUserId: string): Promise<string | null> => {
+			const matchId = userId < otherUserId ? `${userId}_${otherUserId}` : `${otherUserId}_${userId}`;
+			const matchRef = doc(db, "matches", matchId);
+			const snapshot = await getDoc(matchRef);
+			return snapshot.exists() ? matchId : null;
 		},
 		// Get profiles that liked the user
 		getLikesReceived: async (userId: string): Promise<string[]> => {
