@@ -2,6 +2,8 @@
 alwaysApply: true
 ---
 
+## user features
+
 1. sign in/ sign up with google
 2. edit profile info
 3. create group
@@ -15,3 +17,5 @@ alwaysApply: true
 11.   user can see who like him
 12.   user can chat with matches users and groups
 13.   dislike profile should return after 1 days
+
+## system features

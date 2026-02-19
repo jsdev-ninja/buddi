@@ -148,34 +148,28 @@ export default function GroupDetailScreen() {
 
   const handleEditSubmit = async (data: GroupInput) => {
     if (!group?.id) return;
-    try {
-      await firebaseApi.groups.update(group.id, {
-        groupName: data.groupName,
-        destination: data.destination,
-        description: data.description,
-        activityType: data.activityType,
-        difficulty: data.difficulty,
-        tags: data.tags,
-        privacy: data.privacy,
-        startDate: data.startDate,
-        endDate: data.endDate,
-        maxMembers: data.maxMembers,
-        estimatedCost: data.estimatedCost,
-        groupPhoto: data.groupPhoto ?? undefined,
+    await firebaseApi.groups.update(group.id, {
+      groupName: data.groupName,
+      destination: data.destination,
+      description: data.description,
+      activityType: data.activityType,
+      difficulty: data.difficulty,
+      tags: data.tags,
+      privacy: data.privacy,
+      startDate: data.startDate,
+      endDate: data.endDate,
+      maxMembers: data.maxMembers,
+      estimatedCost: data.estimatedCost,
+      groupPhoto: data.groupPhoto ?? undefined,
+    });
+    await fetchGroup();
+    if (user?.uid) {
+      const groups = await firebaseApi.groups.getUserGroups(user.uid);
+      const active: AdventureGroup[] = [];
+      groups.forEach((g: Group) => {
+        if (g.status !== 'completed') active.push(groupToAdventureGroup(g));
       });
-      await fetchGroup();
-      if (user?.uid) {
-        const groups = await firebaseApi.groups.getUserGroups(user.uid);
-        const active: AdventureGroup[] = [];
-        groups.forEach((g: Group) => {
-          if (g.status !== 'completed') active.push(groupToAdventureGroup(g));
-        });
-        setUserGroups(active);
-      }
-      setShowEditModal(false);
-      Alert.alert('Success', 'Group updated.');
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to update group.');
+      setUserGroups(active);
     }
   };
 

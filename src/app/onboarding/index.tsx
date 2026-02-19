@@ -3,10 +3,10 @@ import { buddiColors } from "@/constants/theme";
 import { useAuth } from "@/context/AuthProvider";
 import { firebaseApi } from "@/services/firebase";
 import { Feather } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
 import { useCallback, useState } from "react";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import {
 	Alert,
 	Image,

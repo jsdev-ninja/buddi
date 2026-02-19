@@ -8,6 +8,7 @@ import { Feather } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
 	ActivityIndicator,
+	Alert,
 	Modal,
 	Platform,
 	Pressable,
@@ -24,7 +25,7 @@ import { z } from 'zod';
 interface CreateGroupModalProps {
 	visible: boolean;
 	onClose: () => void;
-	onSubmit: (data: GroupInput) => void;
+	onSubmit: (data: GroupInput) => void | Promise<void>;
 	mode?: 'create' | 'edit';
 	initialData?: Partial<GroupInput>;
 }
@@ -62,6 +63,7 @@ export function CreateGroupModal({ visible, onClose, onSubmit, mode = 'create', 
 	const [matchProfiles, setMatchProfiles] = useState<Profile[]>([]);
 	const [searchQuery, setSearchQuery] = useState('');
 	const [isLoadingMatches, setIsLoadingMatches] = useState(false);
+	const [isSubmitting, setIsSubmitting] = useState(false);
 
 	// Fetch matches and their profiles when step 3 is shown (for participant selection)
 	const fetchMatchProfiles = useCallback(async () => {
@@ -144,10 +146,15 @@ export function CreateGroupModal({ visible, onClose, onSubmit, mode = 'create', 
 	const validateStep = (stepToValidate: Step): boolean => {
 		try {
 			if (stepToValidate === 1) {
-				// All fields optional for step 1
 				const step1Schema = z.object({
-					groupName: z.string().max(100, 'Group name must be less than 100 characters').optional(),
-					destination: z.string().max(200, 'Destination must be less than 200 characters').optional(),
+					groupName: z
+						.string()
+						.min(1, 'Group name is required')
+						.max(100, 'Group name must be less than 100 characters'),
+					destination: z
+						.string()
+						.min(1, 'Destination is required')
+						.max(200, 'Destination must be less than 200 characters'),
 					description: z.string().max(1000, 'Description must be less than 1000 characters').optional(),
 					activityType: ActivityTypeEnum.optional(),
 					difficulty: DifficultyEnum.optional(),
@@ -156,28 +163,34 @@ export function CreateGroupModal({ visible, onClose, onSubmit, mode = 'create', 
 				});
 				step1Schema.parse(formData);
 			} else if (stepToValidate === 2) {
-				// All fields optional for step 2
-				const step2Schema = z.object({
-					startDate: z.string().optional(),
-					endDate: z.string().optional(),
-					maxMembers: z.number().int().positive('Max members must be greater than 0').optional(),
-					estimatedCost: z.string().optional(),
-					groupPhoto: z.string().optional().nullable(),
-				}).refine(
-					(data) => {
-						if (data.startDate && data.endDate) {
-							const start = new Date(data.startDate);
-							const end = new Date(data.endDate);
-							return end >= start;
-						}
-						return true;
-					},
-					{
-						message: 'End date must be after start date',
-						path: ['endDate'],
-					}
-				);
-				step2Schema.parse(formData);
+				const step2Schema = z
+					.object({
+						startDate: z.string().optional(),
+						endDate: z.string().optional(),
+						maxMembers: z
+							.number()
+							.int('Max members must be a whole number')
+							.positive('Max members must be greater than 0')
+							.max(1000, 'Max members cannot exceed 1000'),
+						estimatedCost: z.string().optional(),
+						groupPhoto: z.string().optional().nullable(),
+					})
+					.refine(
+						(data) => {
+							if (data.startDate && data.endDate) {
+								const start = new Date(data.startDate);
+								const end = new Date(data.endDate);
+								if (isNaN(start.getTime()) || isNaN(end.getTime())) return true; // let field validation handle invalid dates
+								return end >= start;
+							}
+							return true;
+						},
+						{ message: 'End date must be after start date', path: ['endDate'] }
+					);
+				step2Schema.parse({
+					...formData,
+					maxMembers: formData.maxMembers ?? 10,
+				});
 			}
 			setErrors({});
 			return true;
@@ -199,12 +212,10 @@ export function CreateGroupModal({ visible, onClose, onSubmit, mode = 'create', 
 
 	const handleNext = () => {
 		if (step === 3) {
-			// Step 3 doesn't need validation, just submit
 			handleSubmit();
 		} else {
-			// All fields are optional, so always allow moving to next step
+			if (!validateStep(step)) return;
 			setStep((step + 1) as Step);
-			// Clear errors when moving to next step
 			setErrors({});
 		}
 	};
@@ -215,9 +226,8 @@ export function CreateGroupModal({ visible, onClose, onSubmit, mode = 'create', 
 		}
 	};
 
-	const handleSubmit = () => {
+	const handleSubmit = async () => {
 		try {
-			// Ensure all required fields have defaults
 			const dataToValidate = {
 				...formData,
 				type: 'group' as const,
@@ -227,8 +237,9 @@ export function CreateGroupModal({ visible, onClose, onSubmit, mode = 'create', 
 				maxMembers: formData.maxMembers || 10,
 			};
 			const validated = groupInputSchema.parse(dataToValidate);
-			onSubmit(validated);
-			// Reset form
+			setIsSubmitting(true);
+			await Promise.resolve(onSubmit(validated));
+			Alert.alert('Success', mode === 'edit' ? 'Group updated successfully!' : 'Group created successfully!');
 			setStep(1);
 			setFormData({
 				privacy: 'public',
@@ -248,15 +259,17 @@ export function CreateGroupModal({ visible, onClose, onSubmit, mode = 'create', 
 					}
 				});
 				setErrors(newErrors);
-				// Go back to first step with errors if needed
-				if (newErrors.groupName || newErrors.destination) {
+				if (newErrors.groupName || newErrors.destination || newErrors.description || newErrors.activityType || newErrors.difficulty) {
 					setStep(1);
-				} else if (newErrors.startDate || newErrors.endDate || newErrors.maxMembers) {
+				} else if (newErrors.startDate || newErrors.endDate || newErrors.maxMembers || newErrors.estimatedCost) {
 					setStep(2);
 				}
 			} else {
-				console.error('Submit error:', error);
+				const message = error instanceof Error ? error.message : 'Failed to create group. Please try again.';
+				Alert.alert('Error', message);
 			}
+		} finally {
+			setIsSubmitting(false);
 		}
 	};
 
@@ -655,21 +668,33 @@ export function CreateGroupModal({ visible, onClose, onSubmit, mode = 'create', 
 
 					{/* Footer Buttons */}
 					<View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-						<Pressable style={styles.cancelButton} onPress={onClose}>
+						<Pressable style={styles.cancelButton} onPress={onClose} disabled={isSubmitting}>
 							<Text style={styles.cancelButtonText}>Cancel</Text>
 						</Pressable>
 						{step === 3 ? (
-							<Pressable style={styles.createButton} onPress={handleSubmit}>
-								<Text style={styles.createButtonText}>{mode === 'edit' ? 'Save changes' : 'Create Group'}</Text>
+							<Pressable
+								style={[styles.createButton, isSubmitting && styles.buttonDisabled]}
+								onPress={handleSubmit}
+								disabled={isSubmitting}
+							>
+								{isSubmitting ? (
+									<ActivityIndicator size="small" color="#fff" />
+								) : (
+									<Text style={styles.createButtonText}>{mode === 'edit' ? 'Save changes' : 'Create Group'}</Text>
+								)}
 							</Pressable>
 						) : (
-							<Pressable style={styles.nextButton} onPress={handleNext}>
+							<Pressable
+								style={[styles.nextButton, isSubmitting && styles.buttonDisabled]}
+								onPress={handleNext}
+								disabled={isSubmitting}
+							>
 								<Text style={styles.nextButtonText}>Next</Text>
 							</Pressable>
 						)}
 						{step > 1 && (
 							<View style={styles.previousButtonContainer}>
-								<Pressable style={styles.previousButton} onPress={handlePrevious}>
+								<Pressable style={styles.previousButton} onPress={handlePrevious} disabled={isSubmitting}>
 									<Text style={styles.previousButtonText}>Previous</Text>
 								</Pressable>
 							</View>
@@ -1069,6 +1094,9 @@ const styles = StyleSheet.create({
 		borderRadius: 12,
 		backgroundColor: buddiColors.primary,
 		alignItems: 'center',
+	},
+	buttonDisabled: {
+		opacity: 0.6,
 	},
 	createButtonText: {
 		fontSize: 16,

@@ -203,39 +203,23 @@ export default function MessagesScreen() {
         visible={showCreateGroup}
         onClose={() => setShowCreateGroup(false)}
         onSubmit={async (data: GroupInput) => {
-          try {
-            // Convert GroupInput to format for Firestore
-            // Dates will be converted from strings to Timestamp in the create function
-            const groupData = {
-              userId: "", // Will be set by Firestore function from current user
-              groupName: data.groupName,
-              destination: data.destination,
-              description: data.description,
-              activityType: data.activityType,
-              difficulty: data.difficulty,
-              tags: data.tags,
-              privacy: data.privacy,
-              startDate: data.startDate, // String - will be converted to Timestamp
-              endDate: data.endDate, // String - will be converted to Timestamp
-              maxMembers: data.maxMembers,
-              estimatedCost: data.estimatedCost,
-              groupPhoto: data.groupPhoto || null,
-              participants: data.participants,
-            };
-
-            // Create group in Firestore
-            const createdGroup = await firebaseApi.groups.create(groupData);
-            console.log('Group created in Firestore:', createdGroup);
-            
-            setShowCreateGroup(false);
-            Alert.alert('Success', 'Group created successfully!');
-          } catch (error: any) {
-            console.error('Error creating group:', error);
-            Alert.alert(
-              'Error',
-              error.message || 'Failed to create group. Please try again.'
-            );
-          }
+          const groupData = {
+            userId: "",
+            groupName: data.groupName,
+            destination: data.destination,
+            description: data.description,
+            activityType: data.activityType,
+            difficulty: data.difficulty,
+            tags: data.tags,
+            privacy: data.privacy,
+            startDate: data.startDate,
+            endDate: data.endDate,
+            maxMembers: data.maxMembers,
+            estimatedCost: data.estimatedCost,
+            groupPhoto: data.groupPhoto || null,
+            participants: data.participants,
+          };
+          await firebaseApi.groups.create(groupData);
         }}
       />
     </View>
