@@ -1,9 +1,13 @@
 import { buddiColors } from '@/constants/theme';
+import type { Profile } from '@/entities/profile';
 import type { GroupInput } from '@/entities/group';
 import { ActivityTypeEnum, DifficultyEnum, groupInputSchema, PrivacyEnum } from '@/entities/group';
+import { useAuth } from '@/context/AuthProvider';
+import { firebaseApi } from '@/services/firebase';
 import { Feather } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
+	ActivityIndicator,
 	Modal,
 	Platform,
 	Pressable,
@@ -45,6 +49,7 @@ const DIFFICULTY_LEVELS = ['Easy', 'Moderate', 'Hard', 'Expert'] as const;
 
 export function CreateGroupModal({ visible, onClose, onSubmit, mode = 'create', initialData }: CreateGroupModalProps) {
 	const insets = useSafeAreaInsets();
+	const { user } = useAuth();
 	const [step, setStep] = useState<Step>(1);
 	const [formData, setFormData] = useState<Partial<GroupInput>>({
 		privacy: 'public',
@@ -54,6 +59,58 @@ export function CreateGroupModal({ visible, onClose, onSubmit, mode = 'create', 
 	});
 	const [errors, setErrors] = useState<Record<string, string>>({});
 	const [tagInput, setTagInput] = useState('');
+	const [matchProfiles, setMatchProfiles] = useState<Profile[]>([]);
+	const [searchQuery, setSearchQuery] = useState('');
+	const [isLoadingMatches, setIsLoadingMatches] = useState(false);
+
+	// Fetch matches and their profiles when step 3 is shown (for participant selection)
+	const fetchMatchProfiles = useCallback(async () => {
+		if (!user?.uid) return;
+		try {
+			setIsLoadingMatches(true);
+			const matches = await firebaseApi.matches.getUserMatches(user.uid);
+			const profiles: Profile[] = [];
+			for (const m of matches) {
+				const profile = await firebaseApi.profiles.getProfile(m.userId);
+				if (profile) profiles.push(profile);
+			}
+			if (mode === 'edit' && initialData?.participants?.length) {
+				for (const pid of initialData.participants) {
+					if (!profiles.some((p) => p.userId === pid || p.id === pid)) {
+						const profile = await firebaseApi.profiles.getProfile(pid);
+						if (profile) profiles.push(profile);
+					}
+				}
+			}
+			setMatchProfiles(profiles);
+		} catch (error) {
+			console.error('Error fetching match profiles:', error);
+			setMatchProfiles([]);
+		} finally {
+			setIsLoadingMatches(false);
+		}
+	}, [user?.uid, mode, initialData?.participants]);
+
+	useEffect(() => {
+		if (visible && step === 3 && user?.uid) {
+			fetchMatchProfiles();
+		} else if (!visible) {
+			setMatchProfiles([]);
+			setSearchQuery('');
+		}
+	}, [visible, step, user?.uid, fetchMatchProfiles]);
+
+	// Filter participants by search query (name or location)
+	const filteredParticipants = React.useMemo(() => {
+		const q = searchQuery.trim().toLowerCase();
+		if (!q) return matchProfiles;
+		return matchProfiles.filter(
+			(p) =>
+				(p.name?.toLowerCase().includes(q) ?? false) ||
+				(p.location?.toLowerCase().includes(q) ?? false) ||
+				(p.country?.toLowerCase().includes(q) ?? false)
+		);
+	}, [matchProfiles, searchQuery]);
 
 	// Reset form when modal closes; when opening in edit mode, seed from initialData
 	React.useEffect(() => {
@@ -125,11 +182,11 @@ export function CreateGroupModal({ visible, onClose, onSubmit, mode = 'create', 
 			setErrors({});
 			return true;
 		} catch (error) {
-			if (error instanceof z.ZodError && error.errors) {
+			if (error instanceof z.ZodError && error.issues) {
 				const newErrors: Record<string, string> = {};
-				error.errors.forEach((err) => {
-					if (err.path && err.path.length > 0) {
-						newErrors[err.path[0] as string] = err.message;
+				error.issues.forEach((issue: z.ZodIssue) => {
+					if (issue.path && issue.path.length > 0) {
+						newErrors[issue.path[0] as string] = issue.message;
 					}
 				});
 				setErrors(newErrors);
@@ -183,11 +240,11 @@ export function CreateGroupModal({ visible, onClose, onSubmit, mode = 'create', 
 			setTagInput('');
 			onClose();
 		} catch (error) {
-			if (error instanceof z.ZodError && error.errors) {
+			if (error instanceof z.ZodError && error.issues) {
 				const newErrors: Record<string, string> = {};
-				error.errors.forEach((err) => {
-					if (err.path && err.path.length > 0) {
-						newErrors[err.path[0] as string] = err.message;
+				error.issues.forEach((issue: z.ZodIssue) => {
+					if (issue.path && issue.path.length > 0) {
+						newErrors[issue.path[0] as string] = issue.message;
 					}
 				});
 				setErrors(newErrors);
@@ -225,13 +282,6 @@ export function CreateGroupModal({ visible, onClose, onSubmit, mode = 'create', 
 		const newParticipants = formData.participants?.filter((id) => id !== userId) || [];
 		updateField('participants', newParticipants);
 	};
-
-	// Mock participants for step 3 (replace with actual user search)
-	const mockParticipants = [
-		{ id: '1', name: 'John Doe', location: 'San Francisco, CA' },
-		{ id: '2', name: 'Jane Smith', location: 'Los Angeles, CA' },
-		{ id: '3', name: 'Bob Wilson', location: 'Seattle, WA' },
-	];
 
 	return (
 		<Modal visible={visible} animationType="slide" presentationStyle="fullScreen">
@@ -543,40 +593,62 @@ export function CreateGroupModal({ visible, onClose, onSubmit, mode = 'create', 
 										style={styles.searchInput}
 										placeholder="Search by name or location..."
 										placeholderTextColor={buddiColors.textSecondary}
+										value={searchQuery}
+										onChangeText={setSearchQuery}
 									/>
 								</View>
 
 								<Text style={styles.sectionSubtitle}>Available users</Text>
 
-								<View style={styles.participantsList}>
-									{mockParticipants.map((participant) => {
-										const isSelected = formData.participants?.includes(participant.id);
-										return (
-											<TouchableOpacity
-												key={participant.id}
-												style={[
-													styles.participantItem,
-													isSelected && styles.participantItemSelected,
-												]}
-												onPress={() => {
-													if (isSelected) {
-														removeParticipant(participant.id);
-													} else {
-														addParticipant(participant.id);
-													}
-												}}
-											>
-												<View style={styles.participantInfo}>
-													<Text style={styles.participantName}>{participant.name}</Text>
-													<Text style={styles.participantLocation}>{participant.location}</Text>
-												</View>
-												{isSelected && (
-													<Feather name="check-circle" size={24} color={buddiColors.primary} />
-												)}
-											</TouchableOpacity>
-										);
-									})}
-								</View>
+								{isLoadingMatches ? (
+									<View style={styles.participantsLoading}>
+										<ActivityIndicator size="large" color={buddiColors.primary} />
+										<Text style={styles.participantsLoadingText}>Loading matches...</Text>
+									</View>
+								) : filteredParticipants.length === 0 ? (
+									<View style={styles.participantsEmpty}>
+										<Feather name="users" size={40} color={buddiColors.textTertiary} />
+										<Text style={styles.participantsEmptyText}>
+											{matchProfiles.length === 0
+												? 'No matches yet. Like profiles in Discover to match with travelers!'
+												: 'No matches match your search.'}
+										</Text>
+									</View>
+								) : (
+									<View style={styles.participantsList}>
+										{filteredParticipants.map((profile) => {
+											const participantId = profile.userId ?? profile.id;
+											const isSelected = formData.participants?.includes(participantId);
+											const displayLocation = profile.location ?? profile.country ?? '';
+											return (
+												<TouchableOpacity
+													key={participantId}
+													style={[
+														styles.participantItem,
+														isSelected && styles.participantItemSelected,
+													]}
+													onPress={() => {
+														if (isSelected) {
+															removeParticipant(participantId);
+														} else {
+															addParticipant(participantId);
+														}
+													}}
+												>
+													<View style={styles.participantInfo}>
+														<Text style={styles.participantName}>{profile.name || 'Unknown'}</Text>
+														{displayLocation ? (
+															<Text style={styles.participantLocation}>{displayLocation}</Text>
+														) : null}
+													</View>
+													{isSelected && (
+														<Feather name="check-circle" size={24} color={buddiColors.primary} />
+													)}
+												</TouchableOpacity>
+											);
+										})}
+									</View>
+								)}
 							</View>
 						)}
 					</ScrollView>
@@ -903,6 +975,25 @@ const styles = StyleSheet.create({
 		fontWeight: '600',
 		color: buddiColors.textPrimary,
 		marginBottom: 12,
+	},
+	participantsLoading: {
+		paddingVertical: 40,
+		alignItems: 'center',
+		gap: 12,
+	},
+	participantsLoadingText: {
+		fontSize: 14,
+		color: buddiColors.textSecondary,
+	},
+	participantsEmpty: {
+		paddingVertical: 40,
+		alignItems: 'center',
+		gap: 12,
+	},
+	participantsEmptyText: {
+		fontSize: 14,
+		color: buddiColors.textSecondary,
+		textAlign: 'center',
 	},
 	participantsList: {
 		gap: 12,
