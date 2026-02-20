@@ -10,17 +10,42 @@ import { useAuth } from "./AuthProvider";
 
 const SETTINGS_KEY = "@buddi/settings";
 
-// Show notifications when app is in foreground (banner + sound)
+/** When set, incoming "new_message" notifications for this conversation are suppressed (user is already in that chat). */
+let currentChatConversationId: string | null = null;
+
+export function setCurrentChatConversationId(conversationId: string | null) {
+	currentChatConversationId = conversationId;
+}
+
+// Show notifications when app is in foreground (banner + sound), except for the chat we're currently viewing
 Notifications.setNotificationHandler({
-	handleNotification: async () => ({
-		shouldShowAlert: true,
-		shouldPlaySound: true,
-		shouldSetBadge: true,
-		shouldShowBanner: true,
-		shouldShowList: true,
-		shouldAnnotatePresentedNotification: true,
-		sticky: false,
-	}),
+	handleNotification: async (notification) => {
+		const data = notification.request.content.data as { type?: string; conversationId?: string } | undefined;
+		const isNewMessageForCurrentChat =
+			data?.type === "new_message" &&
+			data?.conversationId != null &&
+			data.conversationId === currentChatConversationId;
+		if (isNewMessageForCurrentChat) {
+			return {
+				shouldShowAlert: false,
+				shouldPlaySound: false,
+				shouldSetBadge: false,
+				shouldShowBanner: false,
+				shouldShowList: false,
+				shouldAnnotatePresentedNotification: true,
+				sticky: false,
+			};
+		}
+		return {
+			shouldShowAlert: true,
+			shouldPlaySound: true,
+			shouldSetBadge: true,
+			shouldShowBanner: true,
+			shouldShowList: true,
+			shouldAnnotatePresentedNotification: true,
+			sticky: false,
+		};
+	},
 });
 
 const DEFAULT_CHANNEL_ID = "buddi-default";
@@ -115,7 +140,7 @@ function useNotificationResponseListener() {
 			switch (type) {
 				case "new_message":
 					if (data.conversationId) {
-						router.push(`/(tabs)/chat?id=${data.conversationId}` as any);
+						router.push(`/chat?id=${data.conversationId}`);
 					} else {
 						router.push("/(tabs)/messages" as any);
 					}

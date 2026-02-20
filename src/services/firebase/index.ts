@@ -1126,6 +1126,8 @@ export const firebaseApi = {
 			text: string;
 			timestamp: string;
 			isSent: boolean;
+			createdAt: number;
+			userId: string;
 		}[]> => {
 			try {
 				if (!auth.currentUser) {
@@ -1144,19 +1146,24 @@ export const firebaseApi = {
 					text: string;
 					timestamp: string;
 					isSent: boolean;
+					createdAt: number;
+					userId: string;
 				}[] = [];
 
 				snapshot.forEach((doc) => {
 					const data = doc.data();
+					const createdAt = data.createdAt ?? 0;
 					messages.push({
 						id: doc.id,
 						text: data.text,
-						timestamp: new Date(data.createdAt).toLocaleTimeString("en-US", {
+						timestamp: new Date(createdAt).toLocaleTimeString("en-US", {
 							hour: "2-digit",
 							minute: "2-digit",
 							hour12: false,
 						}),
 						isSent: data.userId === userId,
+						createdAt,
+						userId: data.userId ?? "",
 					});
 				});
 
@@ -1174,6 +1181,8 @@ export const firebaseApi = {
 				text: string;
 				timestamp: string;
 				isSent: boolean;
+				createdAt: number;
+				userId: string;
 			}[]) => void
 		): (() => void) => {
 			if (!auth.currentUser) {
@@ -1192,19 +1201,24 @@ export const firebaseApi = {
 					text: string;
 					timestamp: string;
 					isSent: boolean;
+					createdAt: number;
+					userId: string;
 				}[] = [];
 
 				snapshot.forEach((doc) => {
 					const data = doc.data();
+					const createdAt = data.createdAt ?? 0;
 					messages.push({
 						id: doc.id,
 						text: data.text,
-						timestamp: new Date(data.createdAt).toLocaleTimeString("en-US", {
+						timestamp: new Date(createdAt).toLocaleTimeString("en-US", {
 							hour: "2-digit",
 							minute: "2-digit",
 							hour12: false,
 						}),
 						isSent: data.userId === userId,
+						createdAt,
+						userId: data.userId ?? "",
 					});
 				});
 

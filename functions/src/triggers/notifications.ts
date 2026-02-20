@@ -102,7 +102,8 @@ export const onMessageCreated = onDocumentCreated(
 				.get();
 			if (!convDoc.exists) return;
 			const participants = (convDoc.data()?.participants as string[] | undefined) ?? [];
-			const recipients = participants.filter((id) => id !== senderId);
+			// Only notify other participants; never send push to the sender
+			const recipients = participants.filter((id) => id && id !== senderId);
 			if (recipients.length === 0) return;
 			const preview = text.length > 80 ? text.slice(0, 77) + "..." : text;
 			await sendPushToUsers(

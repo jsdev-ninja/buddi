@@ -100,13 +100,13 @@ export default function MessagesScreen() {
       try {
         await firebaseApi.chat.createConversation([item.otherUserId], false);
         const nameParam = encodeURIComponent(item.name);
-        router.push(`/(tabs)/chat?id=${item.id}&name=${nameParam}`);
+        router.push(`/chat?id=${item.id}&name=${nameParam}`);
       } catch (error) {
         console.error('Error creating conversation:', error);
         Alert.alert('Error', 'Could not start chat. Please try again.');
       }
     } else {
-      router.push(`/(tabs)/chat?id=${item.id}`);
+      router.push(`/chat?id=${item.id}`);
     }
   };
 
@@ -224,7 +224,7 @@ export default function MessagesScreen() {
           setShowCreateGroup(false);
           setRefreshTrigger((t) => t + 1);
           // Open the new group chat
-          router.push(`/(tabs)/chat?id=group_${createdGroup.id}`);
+          router.push(`/chat?id=group_${createdGroup.id}`);
         }}
       />
     </View>

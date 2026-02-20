@@ -121,7 +121,7 @@ export default function ViewProfileScreen() {
     try {
       const convId = await firebaseApi.chat.createConversation([id], false);
       const nameParam = encodeURIComponent(profile?.name || 'Unknown');
-      router.replace(`/(tabs)/chat?id=${convId}&name=${nameParam}`);
+      router.replace(`/chat?id=${convId}&name=${nameParam}`);
     } catch (e) {
       Alert.alert('Error', 'Could not start chat.');
     } finally {

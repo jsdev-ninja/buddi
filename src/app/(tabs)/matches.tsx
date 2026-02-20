@@ -148,7 +148,7 @@ export default function MatchesScreen() {
       await firebaseApi.chat.createConversation([otherUserId], false);
       const conversationId = getConversationId(user.uid, otherUserId);
       const nameParam = encodeURIComponent(name);
-      router.push(`/(tabs)/chat?id=${conversationId}&name=${nameParam}`);
+      router.push(`/chat?id=${conversationId}&name=${nameParam}`);
     } catch (error) {
       console.error('Error creating conversation:', error);
       Alert.alert('Error', 'Could not start chat. Please try again.');

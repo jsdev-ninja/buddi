@@ -97,12 +97,6 @@ export default function TabLayout() {
           tabBarBadge: matchesBadge > 0 ? matchesBadge : undefined,
         }}
       />
-      <Tabs.Screen
-        name="chat"
-        options={{
-          href: null, // Hide from tab bar
-        }}
-      />
     </Tabs>
   );
 }

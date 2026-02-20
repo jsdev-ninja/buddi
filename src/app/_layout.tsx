@@ -21,6 +21,7 @@ function RootNavigator() {
 			<Stack>
 				<Stack.Protected guard={!!user}>
 					<Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+					<Stack.Screen name="chat" options={{ headerShown: false }} />
 					<Stack.Screen name="settings" options={{ headerShown: false }} />
 					<Stack.Screen
 						name="group/[id]"

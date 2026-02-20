@@ -261,7 +261,7 @@ export default function GroupDetailScreen() {
         {isParticipant && (
           <Pressable
             style={styles.chatButton}
-            onPress={() => router.push(`/(tabs)/chat?id=group_${group.id}` as any)}
+            onPress={() => router.push(`/chat?id=group_${group.id}`)}
           >
             <Feather name="message-circle" size={20} color={buddiColors.textOnDark} />
             <Text style={styles.chatButtonText}>Group chat</Text>
