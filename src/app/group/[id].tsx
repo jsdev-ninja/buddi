@@ -106,6 +106,7 @@ export default function GroupDetailScreen() {
   }, [group?.id, group?.userId, user?.uid]);
 
   const isCreator = !!user?.uid && !!group && group.userId === user.uid;
+  const isParticipant = !!user?.uid && !!group && (group.userId === user.uid || (group.participants ?? []).includes(user.uid));
   const isCompleted = group?.status === 'completed';
   const participants = group?.participants ?? [];
   const maxMembers = group?.maxMembers ?? 10;
@@ -256,6 +257,16 @@ export default function GroupDetailScreen() {
             )}
           </View>
         </Card>
+
+        {isParticipant && (
+          <Pressable
+            style={styles.chatButton}
+            onPress={() => router.push(`/(tabs)/chat?id=group_${group.id}` as any)}
+          >
+            <Feather name="message-circle" size={20} color={buddiColors.textOnDark} />
+            <Text style={styles.chatButtonText}>Group chat</Text>
+          </Pressable>
+        )}
 
         {isCreator && !isCompleted && (
           <Pressable style={styles.primaryButton} onPress={handleMarkCompleted}>
@@ -468,6 +479,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: buddiColors.textOnDark,
+  },
+  chatButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: buddiColors.surface,
+    borderWidth: 1,
+    borderColor: buddiColors.primary,
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  chatButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: buddiColors.primary,
   },
   section: {
     marginTop: 8,

@@ -33,6 +33,7 @@ export default function MessagesScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -66,7 +67,7 @@ export default function MessagesScreen() {
     };
 
     fetchData();
-  }, [user?.uid]);
+  }, [user?.uid, refreshTrigger]);
 
   const conversationIds = useMemo(
     () => new Set(conversations.map((c) => c.id)),
@@ -219,7 +220,11 @@ export default function MessagesScreen() {
             groupPhoto: data.groupPhoto || null,
             participants: data.participants,
           };
-          await firebaseApi.groups.create(groupData);
+          const createdGroup = await firebaseApi.groups.create(groupData);
+          setShowCreateGroup(false);
+          setRefreshTrigger((t) => t + 1);
+          // Open the new group chat
+          router.push(`/(tabs)/chat?id=group_${createdGroup.id}`);
         }}
       />
     </View>

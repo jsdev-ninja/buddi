@@ -16,6 +16,7 @@ import {
 } from "firebase/auth";
 import {
 	addDoc,
+	arrayUnion,
 	collection,
 	deleteDoc,
 	doc,
@@ -114,18 +115,47 @@ GoogleSignin.configure({
 	// Android client ID will be read from google-services.json if available
 });
 
-// recursively remove undefined values from an object
+/**
+ * Returns a Firestore-safe copy of the value: no undefined anywhere.
+ * - Primitives and null are returned as-is.
+ * - Arrays: undefined elements removed, each element cleaned recursively.
+ * - Objects: keys with undefined value removed, nested values cleaned recursively.
+ * Does not mutate the input. Use before setDoc/updateDoc when payload may contain undefined.
+ */
+export function cleanForFirestore<T>(value: T): T {
+	if (value === null || value === undefined) {
+		return value;
+	}
+	if (typeof value !== "object") {
+		return value;
+	}
+	if (Array.isArray(value)) {
+		return value
+			.filter((item) => item !== undefined)
+			.map((item) => cleanForFirestore(item)) as T;
+	}
+	const out: Record<string, unknown> = {};
+	for (const key of Object.keys(value as object)) {
+		const v = (value as Record<string, unknown>)[key];
+		if (v === undefined) continue;
+		out[key] = cleanForFirestore(v);
+	}
+	return out as T;
+}
+
+/** @deprecated Use cleanForFirestore for new code. Mutates obj and removes undefined. */
 const cleanObject = (obj: any) => {
-	if (typeof obj !== "object" || obj === null) {
+	if (typeof obj !== "object" || obj === null) return obj;
+	if (Array.isArray(obj)) {
+		for (let i = obj.length - 1; i >= 0; i--) {
+			if (obj[i] === undefined) obj.splice(i, 1);
+			else obj[i] = cleanObject(obj[i]);
+		}
 		return obj;
 	}
 	for (const key in obj) {
-		if (obj[key] === undefined) {
-			delete obj[key];
-		}
-		if (typeof obj[key] === "object") {
-			obj[key] = cleanObject(obj[key]);
-		}
+		if (obj[key] === undefined) delete obj[key];
+		else if (typeof obj[key] === "object" && obj[key] !== null) obj[key] = cleanObject(obj[key]);
 	}
 	return obj;
 };
@@ -371,6 +401,22 @@ export const firebaseApi = {
 				// Add document to Firestore
 				const docRef = await addDoc(collection(db, "groups"), firestoreData);
 
+				// Create group chat conversation so it appears in Messages and all participants can talk
+				const creatorId = auth.currentUser!.uid;
+				const initialParticipantIds = Array.isArray(firestoreData.participants) ? firestoreData.participants : [];
+				const conversationParticipants = [...new Set([creatorId, ...initialParticipantIds])];
+				const conversationId = `group_${docRef.id}`;
+				await setDoc(doc(db, "conversations", conversationId), {
+					participants: conversationParticipants,
+					isGroup: true,
+					groupId: docRef.id,
+					groupName: firestoreData.groupName || "Unnamed Group",
+					createdAt: now,
+					updatedAt: now,
+					lastMessage: null,
+					lastMessageAt: null,
+				});
+
 				// Return the created group with the document ID
 				return {
 					...firestoreData,
@@ -512,7 +558,8 @@ export const firebaseApi = {
 							? new Date(firestoreData.endDate as string).getTime()
 							: firestoreData.endDate;
 				}
-				await updateDoc(docRef, firestoreData);
+				const cleaned = cleanForFirestore(firestoreData) as Record<string, unknown>;
+				await updateDoc(docRef, cleaned);
 			} catch (error) {
 				console.error("Error updating group:", error);
 				throw error;
@@ -557,6 +604,16 @@ export const firebaseApi = {
 					throw new Error("Group has reached maximum members");
 				}
 				await updateDoc(docRef, { participants, updatedAt: Date.now() });
+
+				// Add user to group chat conversation so they see the chat and can message
+				const conversationRef = doc(db, "conversations", `group_${groupId}`);
+				const convSnap = await getDoc(conversationRef);
+				if (convSnap.exists()) {
+					await updateDoc(conversationRef, {
+						participants: arrayUnion(userId),
+						updatedAt: Date.now(),
+					});
+				}
 			} catch (error) {
 				console.error("Error adding participant:", error);
 				throw error;
