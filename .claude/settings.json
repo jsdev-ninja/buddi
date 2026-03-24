@@ -1,0 +1,9 @@
+{
+  "permissions": {
+"allow": [
+      "Read(/Users/philbro/workspace/buddi/**)",
+      "Edit(/Users/philbro/workspace/buddi/**)",
+      "Write(/Users/philbro/workspace/buddi/**)"
+    ]
+  }
+}

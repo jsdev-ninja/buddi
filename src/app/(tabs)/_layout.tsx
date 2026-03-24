@@ -70,6 +70,7 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Discover',
+          tabBarLabel: () => null,
           tabBarIcon: ({ color, focused }) => (
             <View style={focused ? styles.activeTabIcon : undefined}>
               <Feather 

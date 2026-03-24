@@ -8,7 +8,11 @@ import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Dimensions, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+
+const CARD_GAP = 12;
+const LIST_PADDING = 20;
+const cardWidth = (Dimensions.get('window').width - LIST_PADDING * 2 - CARD_GAP) / 2;
 
 type TabType = 'likesYou' | 'matches';
 
@@ -50,7 +54,7 @@ function ProfileCard({
                 </Text>
                 {(profile.location || profile.locationFlag) && (
                   <View style={styles.locationRow}>
-                    <Feather name="map-pin" size={14} color={buddiColors.textOnDark} />
+                    <Feather name="map-pin" size={10} color={buddiColors.textOnDark} />
                     <Text style={styles.locationText}>
                       {profile.location || ''}
                       {profile.locationFlag ? ` ${profile.locationFlag}` : ''}
@@ -59,7 +63,7 @@ function ProfileCard({
                 )}
                 {actionLabel && !showActions && (
                   <View style={styles.cardActionRow}>
-                    <Feather name="message-circle" size={16} color={buddiColors.textOnDark} />
+                    <Feather name="message-circle" size={12} color={buddiColors.textOnDark} />
                     <Text style={styles.cardActionText}>{actionLabel}</Text>
                   </View>
                 )}
@@ -73,7 +77,7 @@ function ProfileCard({
                       }}
                       accessibilityLabel="Pass"
                     >
-                      <Feather name="x" size={28} color={buddiColors.dangerText} />
+                      <Feather name="x" size={20} color={buddiColors.dangerText} />
                     </Pressable>
                     <Pressable
                       style={styles.likeButton}
@@ -83,7 +87,7 @@ function ProfileCard({
                       }}
                       accessibilityLabel="Like"
                     >
-                      <Feather name="heart" size={28} color={buddiColors.textOnDark} />
+                      <Feather name="heart" size={20} color={buddiColors.textOnDark} />
                     </Pressable>
                   </View>
                 )}
@@ -431,21 +435,25 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   cardsList: {
-    gap: 16,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 12,
   },
   cardWrapper: {
-    marginBottom: 16,
+    width: cardWidth,
+    marginBottom: 4,
   },
   profileCard: {
     width: '100%',
-    borderRadius: 24,
+    borderRadius: 16,
     overflow: 'hidden',
     padding: 0,
   },
   travelerPhotoSection: {
     width: '100%',
     aspectRatio: 3 / 4,
-    minHeight: 280,
+    minHeight: 140,
     position: 'relative',
     backgroundColor: buddiColors.surfaceMuted,
   },
@@ -459,34 +467,34 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   profileOverlay: {
-    padding: 20,
-    paddingBottom: 24,
+    padding: 10,
+    paddingBottom: 12,
   },
   profileName: {
-    fontSize: 22,
+    fontSize: 14,
     fontWeight: 'bold',
     color: buddiColors.textOnDark,
-    marginBottom: 6,
+    marginBottom: 2,
     textTransform: 'capitalize',
   },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
   },
   locationText: {
-    fontSize: 15,
+    fontSize: 11,
     color: buddiColors.textOnDark,
     textTransform: 'capitalize',
   },
   cardActionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 10,
+    gap: 4,
+    marginTop: 6,
   },
   cardActionText: {
-    fontSize: 15,
+    fontSize: 12,
     color: buddiColors.textOnDark,
     fontWeight: '600',
   },
@@ -494,13 +502,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 32,
-    marginTop: 20,
+    gap: 16,
+    marginTop: 10,
   },
   passButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     borderWidth: 2,
     borderColor: buddiColors.dangerText,
     backgroundColor: buddiColors.surface,
@@ -508,9 +516,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   likeButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: buddiColors.primary,
     alignItems: 'center',
     justifyContent: 'center',

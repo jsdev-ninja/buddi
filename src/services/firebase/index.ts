@@ -2,7 +2,6 @@
 import type { Group } from "@/entities/group";
 import type { Profile, ProfileInput } from "@/entities/profile";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import { initializeApp } from "firebase/app";
 import {
 	getAuth,
@@ -107,13 +106,45 @@ const GOOGLE_WEB_CLIENT_ID =
 const GOOGLE_IOS_CLIENT_ID =
 	"64676977478-isdhiokj3hj0q8p0098q1qnru4dqkau8.apps.googleusercontent.com";
 
-// Configure Google Sign-In
-GoogleSignin.configure({
-	webClientId: GOOGLE_WEB_CLIENT_ID, // From Firebase Console (Web client ID)
-	iosClientId: GOOGLE_IOS_CLIENT_ID, // From GoogleService-Info.plist (iOS client ID)
+type GoogleSigninModule = {
+	configure: (config: { webClientId: string; iosClientId?: string }) => void;
+	hasPlayServices: (options?: { showPlayServicesUpdateDialog?: boolean }) => Promise<void>;
+	signIn: () => Promise<unknown>;
+	getTokens: () => Promise<{ idToken?: string | null }>;
+	signOut: () => Promise<void>;
+};
 
-	// Android client ID will be read from google-services.json if available
-});
+let googleSignin: GoogleSigninModule | null = null;
+let googleSigninConfigured = false;
+
+const getGoogleSignin = (): GoogleSigninModule => {
+	if (googleSignin) {
+		return googleSignin;
+	}
+	try {
+		// Lazy-load native module so Expo Go can still boot the app.
+		const mod = require("@react-native-google-signin/google-signin");
+		googleSignin = mod.GoogleSignin as GoogleSigninModule;
+		return googleSignin;
+	} catch {
+		throw new Error(
+			"Google Sign-In native module is not available in this app build. Use a development/production build (not Expo Go)."
+		);
+	}
+};
+
+const ensureGoogleSigninConfigured = () => {
+	if (googleSigninConfigured) {
+		return;
+	}
+	const GoogleSignin = getGoogleSignin();
+	GoogleSignin.configure({
+		webClientId: GOOGLE_WEB_CLIENT_ID, // From Firebase Console (Web client ID)
+		iosClientId: GOOGLE_IOS_CLIENT_ID, // From GoogleService-Info.plist (iOS client ID)
+		// Android client ID will be read from google-services.json if available
+	});
+	googleSigninConfigured = true;
+};
 
 /**
  * Returns a Firestore-safe copy of the value: no undefined anywhere.
@@ -299,6 +330,9 @@ export const firebaseApi = {
 	auth: {
 		loginWithGoogle: async () => {
 			try {
+				ensureGoogleSigninConfigured();
+				const GoogleSignin = getGoogleSignin();
+
 				// Check if Google Play Services are available (Android only)
 				await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
 
@@ -343,7 +377,12 @@ export const firebaseApi = {
 			// Sign out from Firebase
 			await signOut(auth);
 			// Sign out from Google Sign-In
-			await GoogleSignin.signOut();
+			try {
+				const GoogleSignin = getGoogleSignin();
+				await GoogleSignin.signOut();
+			} catch {
+				// Ignore when native module isn't available (e.g. Expo Go).
+			}
 		},
 		getCurrentUser: () => {
 			return auth.currentUser;
