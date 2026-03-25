@@ -33,6 +33,9 @@ yarn-error.*
 # local env files
 .env*.local
 
+# Firebase / GCP secrets (never commit)
+buddia-dev-firebase-adminsdk-*.json
+
 # typescript
 *.tsbuildinfo
 

@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "64676977478",
+    "project_id": "buddia-dev",
+    "storage_bucket": "buddia-dev.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:64676977478:android:f343ce9607afa8e6a3a347",
+        "android_client_info": {
+          "package_name": "com.buddi.travel"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "64676977478-1lq4fnf0khpmhls1qcodbotrpa26md8m.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBbdQ7M0ggNc9zp-S_YkG2O2Y9JwT2QG8c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "64676977478-1lq4fnf0khpmhls1qcodbotrpa26md8m.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "64676977478-isdhiokj3hj0q8p0098q1qnru4dqkau8.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.buddi.buddia"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

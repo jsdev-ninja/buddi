@@ -665,6 +665,9 @@ export const firebaseApi = {
 				if (!auth.currentUser) {
 					throw new Error("User must be authenticated to upload photos");
 				}
+				if (auth.currentUser.uid !== userId) {
+					throw new Error("Cannot upload photos for another user");
+				}
 
 				// Fetch the image as a blob
 				const response = await fetch(uri);

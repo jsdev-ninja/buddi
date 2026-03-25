@@ -22,7 +22,8 @@
 			},
 			"edgeToEdgeEnabled": true,
 			"predictiveBackGestureEnabled": false,
-			"package": "com.buddi.travel"
+			"package": "com.buddi.travel",
+			"googleServicesFile": "./google-services.json"
 		},
 		"web": {
 			"output": "static",
