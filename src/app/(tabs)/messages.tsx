@@ -1,4 +1,5 @@
 import { CreateGroupModal } from '@/components/CreateGroupModal';
+import { LogoIcon } from '@/components/LogoIcon';
 import { SettingsDropdown } from '@/components/SettingsDropdown';
 import { buddiColors } from '@/constants/theme';
 import { useAuth } from '@/context/AuthProvider';
@@ -115,9 +116,7 @@ export default function MessagesScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.logoContainer}>
-          <View style={styles.logoIcon}>
-            <Feather name="map-pin" size={20} color={buddiColors.textOnDark} />
-          </View>
+          <LogoIcon size={32} />
           <Text style={styles.logoText}>Buddia</Text>
         </View>
         <Pressable onPress={() => setShowSettingsDropdown(true)}>
@@ -249,14 +248,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  logoIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: buddiColors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   logoText: {
     fontSize: 20,

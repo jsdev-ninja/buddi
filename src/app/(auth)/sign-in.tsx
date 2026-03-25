@@ -1,10 +1,17 @@
+import { LogoIcon } from "@/components/LogoIcon";
 import { buddiColors } from "@/constants/theme";
 import { useAuth } from "@/context/AuthProvider";
-import { Feather } from "@expo/vector-icons";
+import { firebaseApi } from "@/services/firebase";
+import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { firebaseApi } from "@/services/firebase";
+import {
+	ImageBackground,
+	StyleSheet,
+	Text,
+	TouchableOpacity,
+	View,
+} from "react-native";
 
 export default function SignIn() {
 	const { signIn } = useAuth();
@@ -31,89 +38,131 @@ export default function SignIn() {
 	};
 
 	return (
-		<View style={styles.container}>
-			<View style={styles.content}>
-				<View style={styles.iconContainer}>
-					<Feather name="compass" size={64} color={buddiColors.primary} />
+		<ImageBackground
+			source={require("@/assets/background-auth.png")}
+			style={styles.container}
+			resizeMode="cover"
+		>
+			<LinearGradient
+				colors={["rgba(194, 200, 207, 0.92)", "rgba(242, 242, 242, 0.12)", "rgba(0, 0, 0, 0.2)"]}
+				locations={[0, 0.45, 1]}
+				style={styles.overlay}
+			>
+				<View style={styles.topSection}>
+					<View style={styles.brandRow}>
+						<LogoIcon size={40} />
+						<Text style={styles.brandText}>Buddia</Text>
+					</View>
 				</View>
-				<Text style={styles.title}>Welcome to Buddi</Text>
-				<Text style={styles.subtitle}>Connect with adventure buddies</Text>
 
-				<TouchableOpacity
-					style={[styles.button, isLoading && styles.buttonDisabled]}
-					onPress={handleSignIn}
-					disabled={isLoading}
-				>
-					<Feather name="log-in" size={20} color="#fff" style={styles.buttonIcon} />
-					<Text style={styles.buttonText}>
-						{isLoading ? "Signing in..." : "Sign in with Google"}
-					</Text>
-				</TouchableOpacity>
-			</View>
-		</View>
+				<View style={styles.middleSection}>
+					<Text style={styles.title}>Explore more -</Text>
+					<Text style={styles.title}>together.</Text>
+				</View>
+
+				<View style={styles.bottomSection}>
+					<TouchableOpacity
+						style={[styles.primaryButton, isLoading && styles.buttonDisabled]}
+						onPress={handleSignIn}
+						disabled={isLoading}
+					>
+						<Text style={styles.primaryButtonText}>
+							{isLoading ? "Signing in..." : "Continue with Google"}
+						</Text>
+					</TouchableOpacity>
+
+					<Text style={styles.helperText}>Already have an account?</Text>
+
+					<TouchableOpacity
+						style={[styles.secondaryButton, isLoading && styles.buttonDisabled]}
+						onPress={handleSignIn}
+						disabled={isLoading}
+					>
+						<Text style={styles.secondaryButtonText}>Log In</Text>
+					</TouchableOpacity>
+				</View>
+			</LinearGradient>
+		</ImageBackground>
 	);
 }
 
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
-		backgroundColor: buddiColors.background,
-		justifyContent: "center",
-		alignItems: "center",
-		padding: 20,
 	},
-	content: {
+	overlay: {
+		flex: 1,
+		paddingHorizontal: 24,
+		paddingTop: 36,
+		paddingBottom: 32,
+	},
+	topSection: {
 		width: "100%",
-		maxWidth: 400,
-		alignItems: "center",
 	},
-	iconContainer: {
-		width: 120,
-		height: 120,
-		borderRadius: 60,
-		backgroundColor: buddiColors.surface,
+	middleSection: {
+		flex: 1,
 		justifyContent: "center",
 		alignItems: "center",
-		marginBottom: 32,
-		shadowColor: "#000",
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.1,
-		shadowRadius: 8,
-		elevation: 4,
+	},
+	bottomSection: {
+		width: "100%",
+		alignItems: "center",
+	},
+	brandRow: {
+		flexDirection: "row",
+		alignItems: "center",
+	},
+	brandText: {
+		fontSize: 42 / 2,
+		fontWeight: "700",
+		color: buddiColors.primary,
+		marginLeft: 10,
 	},
 	title: {
-		fontSize: 32,
-		fontWeight: "bold",
-		color: buddiColors.textPrimary,
-		marginBottom: 8,
+		fontSize: 50 / 2,
+		lineHeight: 58 / 2,
+		fontWeight: "800",
+		color: "#f4f4f4",
+		textShadowColor: "rgba(0,0,0,0.25)",
+		textShadowOffset: { width: 0, height: 1 },
+		textShadowRadius: 4,
 		textAlign: "center",
 	},
-	subtitle: {
-		fontSize: 16,
-		color: buddiColors.textSecondary,
-		marginBottom: 48,
-		textAlign: "center",
-	},
-	button: {
-		flexDirection: "row",
+	primaryButton: {
 		alignItems: "center",
 		justifyContent: "center",
 		backgroundColor: buddiColors.primary,
-		paddingVertical: 16,
-		paddingHorizontal: 32,
-		borderRadius: 12,
+		borderRadius: 16,
 		width: "100%",
-		minHeight: 56,
+		minHeight: 54,
+		marginBottom: 34,
+	},
+	primaryButtonText: {
+		color: "#fff",
+		fontSize: 17,
+		fontWeight: "700",
+	},
+	helperText: {
+		fontSize: 28 / 2,
+		fontWeight: "500",
+		color: "rgba(255,255,255,0.88)",
+		textAlign: "center",
+		marginBottom: 10,
+	},
+	secondaryButton: {
+		width: "100%",
+		minHeight: 62,
+		borderRadius: 16,
+		backgroundColor: "rgba(255, 255, 255, 0.86)",
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	secondaryButtonText: {
+		fontSize: 34 / 2,
+		fontWeight: "600",
+		color: "#111",
 	},
 	buttonDisabled: {
 		opacity: 0.6,
-	},
-	buttonIcon: {
-		marginRight: 8,
-	},
-	buttonText: {
-		color: "#fff",
-		fontSize: 16,
-		fontWeight: "600",
 	},
 });

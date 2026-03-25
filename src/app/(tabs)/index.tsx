@@ -3,6 +3,7 @@ import {
 	DiscoverFilterModal,
 	type DiscoverFilterState,
 } from '@/components/DiscoverFilterModal';
+import { LogoIcon } from '@/components/LogoIcon';
 import { SettingsDropdown } from '@/components/SettingsDropdown';
 import { SwipeableCard } from '@/components/SwipeableCard';
 import { buddiColors } from '@/constants/theme';
@@ -200,9 +201,7 @@ export default function DiscoverScreen() {
       {/* Header - respect safe area so it never overlaps status bar or card */}
       <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <View style={styles.logoContainer}>
-          <View style={styles.logoIcon}>
-            <Feather name="map-pin" size={20} color={buddiColors.textOnDark} />
-          </View>
+          <LogoIcon size={32} />
           <Text style={styles.logoText}>Buddia</Text>
         </View>
         <View style={styles.headerButtons}>
@@ -439,14 +438,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  logoIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: buddiColors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   logoText: {
     fontSize: 20,
