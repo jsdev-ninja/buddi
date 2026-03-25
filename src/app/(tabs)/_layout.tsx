@@ -8,12 +8,14 @@ import { Tabs, router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { firebaseApi } from '@/services/firebase';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const { user } = useAuth();
   const [profileChecked, setProfileChecked] = useState(false);
   const { messagesBadge, matchesBadge } = useNotificationBadges();
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (!user) return;
@@ -40,8 +42,8 @@ export default function TabLayout() {
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarStyle: {
-          height: Platform.OS === 'ios' ? 90 : 60,
-          paddingBottom: Platform.OS === 'ios' ? 2 : 4,
+          height: (Platform.OS === 'ios' ? 76 : 60) + insets.bottom,
+          paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 2 : 8),
           paddingTop: 8,
           backgroundColor: buddiColors.surface,
           borderTopWidth: 1,

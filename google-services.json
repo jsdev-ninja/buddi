@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "64676977478-vle0lkor2idkgdp4rcqlnfp65lumooh0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.buddi.travel",
+            "certificate_hash": "a7987d723d2796079daa5fc0c3e92a542899b636"
+          }
+        },
+        {
           "client_id": "64676977478-1lq4fnf0khpmhls1qcodbotrpa26md8m.apps.googleusercontent.com",
           "client_type": 3
         }
