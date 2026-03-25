@@ -3,6 +3,7 @@ import { getFirestore } from "firebase-admin/firestore";
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const BATCH_SIZE = 100;
+const DEFAULT_ANDROID_CHANNEL_ID = "buddi-default";
 
 export interface ExpoPushMessage {
 	to: string;
@@ -10,6 +11,8 @@ export interface ExpoPushMessage {
 	body?: string;
 	data?: Record<string, unknown>;
 	sound?: "default" | null;
+	channelId?: string;
+	priority?: "default" | "normal" | "high";
 }
 
 /**
@@ -97,6 +100,9 @@ export async function sendPushToUsers(
 		body,
 		data,
 		sound: "default",
+		// Ensure Android displays notifications with correct importance.
+		channelId: DEFAULT_ANDROID_CHANNEL_ID,
+		priority: "high",
 	}));
 	await sendToExpo(messages);
 }

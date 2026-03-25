@@ -5,6 +5,7 @@ import { firebaseApi } from '@/services/firebase';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ActivityIndicator,
   Alert,
@@ -20,6 +21,7 @@ export default function ViewProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [iLikedThem, setILikedThem] = useState(false);
@@ -228,7 +230,7 @@ export default function ViewProfileScreen() {
       </ScrollView>
 
       {/* Action buttons */}
-      <View style={styles.actions}>
+      <View style={[styles.actions, { paddingBottom: 20 + Math.max(insets.bottom, 16) }]}>
         {matchId ? (
           <>
             <Pressable
@@ -309,7 +311,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: '600', color: buddiColors.textPrimary },
   reportButton: { padding: 8 },
   scroll: { flex: 1 },
-  scrollContent: { padding: 20, paddingBottom: 120 },
+  scrollContent: { padding: 20, paddingBottom: 140 },
   photoContainer: { position: 'relative', width: '100%', aspectRatio: 3 / 4, borderRadius: 16, overflow: 'hidden', marginBottom: 16 },
   mainPhoto: { width: '100%', height: '100%' },
   verifiedBadge: { position: 'absolute', top: 12, right: 12 },
@@ -335,7 +337,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 16,
     padding: 20,
-    paddingBottom: 36,
     backgroundColor: buddiColors.surface,
     borderTopWidth: 1,
     borderTopColor: buddiColors.surfaceBorder,
