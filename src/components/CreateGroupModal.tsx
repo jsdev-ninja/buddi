@@ -10,7 +10,6 @@ import {
 	ActivityIndicator,
 	Alert,
 	Modal,
-	Platform,
 	Pressable,
 	ScrollView,
 	StyleSheet,
@@ -298,7 +297,7 @@ export function CreateGroupModal({ visible, onClose, onSubmit, mode = 'create', 
 
 	return (
 		<Modal visible={visible} animationType="slide" presentationStyle="fullScreen">
-			<View style={styles.modal}>
+			<View style={[styles.modal, { paddingTop: insets.top }]}>
 					{/* Header */}
 					<View style={styles.header}>
 						<View style={styles.headerLeft}>
@@ -668,36 +667,36 @@ export function CreateGroupModal({ visible, onClose, onSubmit, mode = 'create', 
 
 					{/* Footer Buttons */}
 					<View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-						<Pressable style={styles.cancelButton} onPress={onClose} disabled={isSubmitting}>
-							<Text style={styles.cancelButtonText}>Cancel</Text>
-						</Pressable>
-						{step === 3 ? (
-							<Pressable
-								style={[styles.createButton, isSubmitting && styles.buttonDisabled]}
-								onPress={handleSubmit}
-								disabled={isSubmitting}
-							>
-								{isSubmitting ? (
-									<ActivityIndicator size="small" color="#fff" />
-								) : (
-									<Text style={styles.createButtonText}>{mode === 'edit' ? 'Save changes' : 'Create Group'}</Text>
-								)}
+						<View style={styles.footerMain}>
+							<Pressable style={styles.cancelButton} onPress={onClose} disabled={isSubmitting}>
+								<Text style={styles.cancelButtonText}>Cancel</Text>
 							</Pressable>
-						) : (
-							<Pressable
-								style={[styles.nextButton, isSubmitting && styles.buttonDisabled]}
-								onPress={handleNext}
-								disabled={isSubmitting}
-							>
-								<Text style={styles.nextButtonText}>Next</Text>
-							</Pressable>
-						)}
-						{step > 1 && (
-							<View style={styles.previousButtonContainer}>
-								<Pressable style={styles.previousButton} onPress={handlePrevious} disabled={isSubmitting}>
-									<Text style={styles.previousButtonText}>Previous</Text>
+							{step === 3 ? (
+								<Pressable
+									style={[styles.createButton, isSubmitting && styles.buttonDisabled]}
+									onPress={handleSubmit}
+									disabled={isSubmitting}
+								>
+									{isSubmitting ? (
+										<ActivityIndicator size="small" color="#fff" />
+									) : (
+										<Text style={styles.createButtonText}>{mode === 'edit' ? 'Save changes' : 'Create Group'}</Text>
+									)}
 								</Pressable>
-							</View>
+							) : (
+								<Pressable
+									style={[styles.nextButton, isSubmitting && styles.buttonDisabled]}
+									onPress={handleNext}
+									disabled={isSubmitting}
+								>
+									<Text style={styles.nextButtonText}>Next</Text>
+								</Pressable>
+							)}
+						</View>
+						{step > 1 && (
+							<Pressable style={[styles.previousButton, isSubmitting && styles.buttonDisabled]} onPress={handlePrevious} disabled={isSubmitting}>
+								<Text style={styles.previousButtonText}>Previous</Text>
+							</Pressable>
 						)}
 					</View>
 			</View>
@@ -709,7 +708,6 @@ const styles = StyleSheet.create({
 	modal: {
 		flex: 1,
 		backgroundColor: buddiColors.surface,
-		paddingTop: Platform.OS === 'ios' ? 50 : 20,
 	},
 	header: {
 		flexDirection: 'row',
@@ -740,6 +738,7 @@ const styles = StyleSheet.create({
 		justifyContent: 'center',
 		paddingVertical: 20,
 		paddingHorizontal: 20,
+		direction: 'ltr',
 	},
 	stepCircle: {
 		width: 32,
@@ -780,7 +779,6 @@ const styles = StyleSheet.create({
 	stepContent: {
 		paddingBottom: 20,
 		paddingTop: 10,
-		gap: 20,
 		minHeight: 300,
 	},
 	sectionTitle: {
@@ -856,6 +854,7 @@ const styles = StyleSheet.create({
 		flexWrap: 'wrap',
 		gap: 8,
 		marginTop: 8,
+		direction: 'ltr',
 	},
 	option: {
 		paddingHorizontal: 16,
@@ -1051,16 +1050,18 @@ const styles = StyleSheet.create({
 		color: buddiColors.textSecondary,
 	},
 	footer: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		justifyContent: 'space-between',
+		flexDirection: 'column',
 		paddingHorizontal: 20,
 		paddingTop: 16,
-		paddingBottom: 0, // Will be set dynamically with safe area insets
+		paddingBottom: 0,
 		borderTopWidth: 1,
 		borderTopColor: buddiColors.surfaceBorder,
+		gap: 10,
+	},
+	footerMain: {
+		flexDirection: 'row',
 		gap: 12,
-		flexWrap: 'wrap',
+		direction: 'ltr',
 	},
 	cancelButton: {
 		flex: 1,
@@ -1103,12 +1104,7 @@ const styles = StyleSheet.create({
 		fontWeight: '600',
 		color: '#fff',
 	},
-	previousButtonContainer: {
-		width: '100%',
-		marginTop: 8,
-	},
 	previousButton: {
-		width: '100%',
 		paddingVertical: 14,
 		borderRadius: 12,
 		backgroundColor: buddiColors.surface,
