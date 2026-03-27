@@ -5,11 +5,13 @@ import { ActivityTypeEnum, DifficultyEnum, groupInputSchema, PrivacyEnum } from 
 import { useAuth } from '@/context/AuthProvider';
 import { firebaseApi } from '@/services/firebase';
 import { Feather } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
 	ActivityIndicator,
 	Alert,
 	Modal,
+	Platform,
 	Pressable,
 	ScrollView,
 	StyleSheet,
@@ -63,6 +65,10 @@ export function CreateGroupModal({ visible, onClose, onSubmit, mode = 'create', 
 	const [searchQuery, setSearchQuery] = useState('');
 	const [isLoadingMatches, setIsLoadingMatches] = useState(false);
 	const [isSubmitting, setIsSubmitting] = useState(false);
+	const [showStartPicker, setShowStartPicker] = useState(false);
+	const [showEndPicker, setShowEndPicker] = useState(false);
+	const [startDateObj, setStartDateObj] = useState<Date>(new Date());
+	const [endDateObj, setEndDateObj] = useState<Date>(new Date());
 
 	// Fetch matches and their profiles when step 3 is shown (for participant selection)
 	const fetchMatchProfiles = useCallback(async () => {
@@ -134,6 +140,8 @@ export function CreateGroupModal({ visible, onClose, onSubmit, mode = 'create', 
 				maxMembers: initialData.maxMembers ?? prev.maxMembers,
 				privacy: initialData.privacy ?? prev.privacy,
 			}));
+			if (initialData.startDate) setStartDateObj(new Date(initialData.startDate));
+			if (initialData.endDate) setEndDateObj(new Date(initialData.endDate));
 		}
 	}, [visible, mode, initialData]);
 
@@ -164,8 +172,8 @@ export function CreateGroupModal({ visible, onClose, onSubmit, mode = 'create', 
 			} else if (stepToValidate === 2) {
 				const step2Schema = z
 					.object({
-						startDate: z.string().optional(),
-						endDate: z.string().optional(),
+						startDate: z.union([z.string(), z.number()]).optional(),
+						endDate: z.union([z.string(), z.number()]).optional(),
 						maxMembers: z
 							.number()
 							.int('Max members must be a whole number')
@@ -179,7 +187,7 @@ export function CreateGroupModal({ visible, onClose, onSubmit, mode = 'create', 
 							if (data.startDate && data.endDate) {
 								const start = new Date(data.startDate);
 								const end = new Date(data.endDate);
-								if (isNaN(start.getTime()) || isNaN(end.getTime())) return true; // let field validation handle invalid dates
+								if (isNaN(start.getTime()) || isNaN(end.getTime())) return true;
 								return end >= start;
 							}
 							return true;
@@ -524,28 +532,70 @@ export function CreateGroupModal({ visible, onClose, onSubmit, mode = 'create', 
 
 								<View style={styles.field}>
 									<Text style={styles.label}>Start Date</Text>
-									<TextInput
-										style={[styles.input, errors.startDate && styles.inputError]}
-										placeholder="YYYY-MM-DD"
-										value={formData.startDate || ''}
-										onChangeText={(text) => updateField('startDate', text)}
-									/>
-									{errors.startDate && (
-										<Text style={styles.errorText}>{errors.startDate}</Text>
+									<Pressable
+										style={[styles.dateButton, errors.startDate && styles.inputError]}
+										onPress={() => setShowStartPicker(true)}
+									>
+										<Feather name="calendar" size={18} color={buddiColors.textSecondary} />
+										<Text style={formData.startDate ? styles.dateButtonText : styles.dateButtonPlaceholder}>
+											{formData.startDate ? new Date(formData.startDate).toLocaleDateString() : 'Select start date'}
+										</Text>
+									</Pressable>
+									{showStartPicker && (
+										<DateTimePicker
+											value={startDateObj}
+											mode="date"
+											display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+											minimumDate={new Date()}
+											onChange={(_e, date) => {
+												if (Platform.OS === 'android') setShowStartPicker(false);
+												if (date) {
+													setStartDateObj(date);
+													updateField('startDate', date.toISOString().slice(0, 10));
+												}
+											}}
+										/>
 									)}
+									{Platform.OS === 'ios' && showStartPicker && (
+										<Pressable onPress={() => setShowStartPicker(false)} style={styles.datePickerDone}>
+											<Text style={styles.datePickerDoneText}>Done</Text>
+										</Pressable>
+									)}
+									{errors.startDate && <Text style={styles.errorText}>{errors.startDate}</Text>}
 								</View>
 
 								<View style={styles.field}>
 									<Text style={styles.label}>End Date</Text>
-									<TextInput
-										style={[styles.input, errors.endDate && styles.inputError]}
-										placeholder="YYYY-MM-DD"
-										value={formData.endDate || ''}
-										onChangeText={(text) => updateField('endDate', text)}
-									/>
-									{errors.endDate && (
-										<Text style={styles.errorText}>{errors.endDate}</Text>
+									<Pressable
+										style={[styles.dateButton, errors.endDate && styles.inputError]}
+										onPress={() => setShowEndPicker(true)}
+									>
+										<Feather name="calendar" size={18} color={buddiColors.textSecondary} />
+										<Text style={formData.endDate ? styles.dateButtonText : styles.dateButtonPlaceholder}>
+											{formData.endDate ? new Date(formData.endDate).toLocaleDateString() : 'Select end date'}
+										</Text>
+									</Pressable>
+									{showEndPicker && (
+										<DateTimePicker
+											value={endDateObj}
+											mode="date"
+											display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+											minimumDate={startDateObj}
+											onChange={(_e, date) => {
+												if (Platform.OS === 'android') setShowEndPicker(false);
+												if (date) {
+													setEndDateObj(date);
+													updateField('endDate', date.toISOString().slice(0, 10));
+												}
+											}}
+										/>
 									)}
+									{Platform.OS === 'ios' && showEndPicker && (
+										<Pressable onPress={() => setShowEndPicker(false)} style={styles.datePickerDone}>
+											<Text style={styles.datePickerDoneText}>Done</Text>
+										</Pressable>
+									)}
+									{errors.endDate && <Text style={styles.errorText}>{errors.endDate}</Text>}
 								</View>
 
 								<View style={styles.field}>
@@ -1116,5 +1166,33 @@ const styles = StyleSheet.create({
 		fontSize: 16,
 		fontWeight: '600',
 		color: buddiColors.textPrimary,
+	},
+	dateButton: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 10,
+		backgroundColor: buddiColors.background,
+		borderWidth: 1,
+		borderColor: buddiColors.surfaceBorder,
+		borderRadius: 12,
+		paddingHorizontal: 16,
+		paddingVertical: 14,
+	},
+	dateButtonText: {
+		fontSize: 16,
+		color: buddiColors.textPrimary,
+	},
+	dateButtonPlaceholder: {
+		fontSize: 16,
+		color: buddiColors.textSecondary,
+	},
+	datePickerDone: {
+		alignItems: 'flex-end',
+		paddingVertical: 8,
+	},
+	datePickerDoneText: {
+		fontSize: 16,
+		fontWeight: '600',
+		color: buddiColors.primary,
 	},
 });
