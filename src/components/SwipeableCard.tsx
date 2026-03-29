@@ -162,9 +162,11 @@ export function SwipeableCard({
 
 const styles = StyleSheet.create({
 	container: {
+		flex: 1,
 		width: '100%',
 	},
 	card: {
+		flex: 1,
 		width: '100%',
 	},
 	overlay: {

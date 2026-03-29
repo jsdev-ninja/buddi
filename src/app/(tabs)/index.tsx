@@ -238,8 +238,8 @@ export default function DiscoverScreen() {
         }}
       />
 
-      {/* Main Card - starts below header with gap, no overlap */}
-      <View style={styles.cardContainer}>
+      {/* Main Card - fills all available space */}
+      <View style={[styles.cardContainer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         {isLoadingProfiles ? (
           <View style={styles.loadingContainer}>
             <Text style={styles.loadingText}>Loading profiles...</Text>
@@ -251,12 +251,6 @@ export default function DiscoverScreen() {
             <Text style={styles.emptyText}>There are no more profiles to discover right now. Check back later for new travelers and groups.</Text>
           </View>
         ) : current ? (
-          <ScrollView
-            style={styles.cardScroll}
-            contentContainerStyle={styles.cardScrollContent}
-            showsVerticalScrollIndicator={false}
-            bounces={false}
-          >
           <SwipeableCard
             key={current.data.id}
             cardKey={current.data.id}
@@ -401,7 +395,6 @@ export default function DiscoverScreen() {
               )}
             </Card>
           </SwipeableCard>
-          </ScrollView>
         ) : null}
 
         {/* Only after user has seen all cards (passed or liked the last one) */}
@@ -461,31 +454,18 @@ const styles = StyleSheet.create({
   },
   cardContainer: {
     flex: 1,
-    padding: 20,
-    paddingTop: 16,
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-    minHeight: 0,
-  },
-  cardScroll: {
-    flex: 1,
-    width: '100%',
-  },
-  cardScrollContent: {
-    flexGrow: 1,
-    alignItems: 'center',
-    paddingBottom: 24,
+    padding: 16,
+    paddingTop: 12,
   },
   mainCard: {
-    width: '100%',
+    flex: 1,
     borderRadius: 24,
     overflow: 'hidden',
     padding: 0,
   },
   travelerPhotoSection: {
+    flex: 1,
     width: '100%',
-    aspectRatio: 3 / 4,
-    minHeight: 380,
     position: 'relative',
     backgroundColor: buddiColors.surfaceMuted,
   },
@@ -553,10 +533,9 @@ const styles = StyleSheet.create({
   },
   // Group Card Styles
   groupImageSection: {
+    flex: 6,
     width: '100%',
-    height: '60%',
-    backgroundColor: '#9CA3AF', // Grey placeholder
-    minHeight: 300,
+    backgroundColor: '#9CA3AF',
     position: 'relative',
   },
   groupTagsContainer: {
@@ -590,10 +569,9 @@ const styles = StyleSheet.create({
     color: buddiColors.textOnDark,
   },
   groupContentSection: {
+    flex: 4,
     padding: 20,
     backgroundColor: buddiColors.surface,
-    height: '40%',
-    minHeight: 200,
     gap: 12,
   },
   groupTitle: {
