@@ -155,7 +155,7 @@ export default function ViewProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
           <Feather name="arrow-left" size={24} color={buddiColors.textPrimary} />
         </Pressable>
@@ -301,7 +301,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 56,
+    paddingTop: 8,
     paddingBottom: 12,
     backgroundColor: buddiColors.surface,
     borderBottomWidth: 1,

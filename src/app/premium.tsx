@@ -3,6 +3,7 @@ import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const FEATURES = [
   { icon: 'heart' as const, title: 'Unlimited Likes', desc: 'Like as many profiles as you want.' },
@@ -12,12 +13,13 @@ const FEATURES = [
 ];
 
 export default function PremiumScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const isPremium = false; // TODO: wire to UserPremium / subscription
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
           <Feather name="arrow-left" size={24} color={buddiColors.textPrimary} />
         </Pressable>
@@ -98,7 +100,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 56,
+    paddingTop: 8,
     paddingBottom: 12,
     backgroundColor: buddiColors.surface,
     borderBottomWidth: 1,

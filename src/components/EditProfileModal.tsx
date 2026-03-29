@@ -8,7 +8,6 @@ import {
 	Alert,
 	Image,
 	Modal,
-	Platform,
 	Pressable,
 	ScrollView,
 	StyleSheet,
@@ -17,6 +16,7 @@ import {
 	TouchableOpacity,
 	View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { z } from 'zod';
 
 interface EditProfileModalProps {
@@ -49,6 +49,7 @@ const COMMON_INTERESTS = [
 ] as const;
 
 export function EditProfileModal({ visible, onClose, onSubmit, initialData }: EditProfileModalProps) {
+	const insets = useSafeAreaInsets();
 	const [formData, setFormData] = useState<Partial<ProfileInput>>({
 		interests: [],
 		...initialData,
@@ -169,7 +170,7 @@ export function EditProfileModal({ visible, onClose, onSubmit, initialData }: Ed
 
 	return (
 		<Modal visible={visible} animationType="slide" presentationStyle="fullScreen">
-			<View style={styles.modal}>
+			<View style={[styles.modal, { paddingTop: insets.top }]}>
 				{/* Header */}
 				<View style={styles.header}>
 					<View style={styles.headerLeft}>
@@ -366,7 +367,7 @@ export function EditProfileModal({ visible, onClose, onSubmit, initialData }: Ed
 				</ScrollView>
 
 				{/* Footer Buttons */}
-				<View style={styles.footer}>
+				<View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
 					<Pressable style={styles.cancelButton} onPress={onClose}>
 						<Text style={styles.cancelButtonText}>Cancel</Text>
 					</Pressable>
@@ -383,7 +384,6 @@ const styles = StyleSheet.create({
 	modal: {
 		flex: 1,
 		backgroundColor: buddiColors.surface,
-		paddingTop: Platform.OS === 'ios' ? 50 : 20,
 	},
 	header: {
 		flexDirection: 'row',
@@ -531,7 +531,7 @@ const styles = StyleSheet.create({
 		justifyContent: 'space-between',
 		paddingHorizontal: 20,
 		paddingTop: 16,
-		paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+		paddingBottom: 20,
 		borderTopWidth: 1,
 		borderTopColor: buddiColors.surfaceBorder,
 		gap: 12,

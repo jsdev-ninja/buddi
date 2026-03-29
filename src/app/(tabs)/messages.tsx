@@ -9,6 +9,7 @@ import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type ConversationItem = {
   id: string;
@@ -26,6 +27,7 @@ function getConversationId(userId1: string, userId2: string): string {
 }
 
 export default function MessagesScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
@@ -114,7 +116,7 @@ export default function MessagesScreen() {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <View style={styles.logoContainer}>
           <LogoIcon size={32} />
           <Text style={styles.logoText}>Buddia</Text>
@@ -240,7 +242,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingTop: 10,
     paddingBottom: 16,
     backgroundColor: buddiColors.surface,
   },

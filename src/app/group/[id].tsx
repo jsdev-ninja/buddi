@@ -21,6 +21,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 function formatGroupDate(date?: number | string): string {
   if (!date) return '';
@@ -49,6 +50,7 @@ function groupToAdventureGroup(group: Group): AdventureGroup {
 type LikerWithProfile = { userId: string; createdAt: number; name: string };
 
 export default function GroupDetailScreen() {
+  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuth();
@@ -188,7 +190,7 @@ export default function GroupDetailScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
           <Feather name="arrow-left" size={24} color={buddiColors.textPrimary} />
         </Pressable>
@@ -356,7 +358,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 56,
+    paddingTop: 8,
     paddingBottom: 12,
     backgroundColor: buddiColors.surface,
     borderBottomWidth: 1,

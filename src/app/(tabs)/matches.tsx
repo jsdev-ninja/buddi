@@ -10,6 +10,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Dimensions, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const CARD_GAP = 12;
 const LIST_PADDING = 20;
@@ -102,6 +103,7 @@ function ProfileCard({
 }
 
 export default function MatchesScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('likesYou');
@@ -187,7 +189,7 @@ export default function MatchesScreen() {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <View style={styles.logoContainer}>
           <LogoIcon size={32} />
           <Text style={styles.logoText}>Buddia</Text>
@@ -325,7 +327,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingTop: 10,
     paddingBottom: 16,
     backgroundColor: buddiColors.surface,
   },

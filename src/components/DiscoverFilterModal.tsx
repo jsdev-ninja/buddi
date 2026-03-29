@@ -11,6 +11,7 @@ import {
 	TouchableOpacity,
 	View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export type DiscoverFilterState = {
 	distanceKm: number;
@@ -65,6 +66,7 @@ export function DiscoverFilterModal({
 	initialFilter,
 	onApply,
 }: DiscoverFilterModalProps) {
+	const insets = useSafeAreaInsets();
 	const [filter, setFilter] = useState<DiscoverFilterState>(initialFilter);
 
 	React.useEffect(() => {
@@ -91,7 +93,7 @@ export function DiscoverFilterModal({
 			onRequestClose={onClose}
 		>
 			<Pressable style={styles.overlay} onPress={onClose}>
-				<View style={styles.sheet} onStartShouldSetResponder={() => true}>
+				<View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]} onStartShouldSetResponder={() => true}>
 					<View style={styles.handle} />
 					<View style={styles.header}>
 						<Text style={styles.title}>Filters</Text>
@@ -293,7 +295,6 @@ const styles = StyleSheet.create({
 		borderTopLeftRadius: 20,
 		borderTopRightRadius: 20,
 		maxHeight: "85%",
-		paddingBottom: 34,
 	},
 	handle: {
 		width: 40,
@@ -370,16 +371,19 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		flexWrap: "wrap",
 		gap: 8,
+		direction: "ltr",
 	},
 	chipRow: {
 		flexDirection: "row",
 		flexWrap: "wrap",
 		gap: 10,
+		direction: "ltr",
 	},
 	chipRowWrap: {
 		flexDirection: "row",
 		flexWrap: "wrap",
 		gap: 10,
+		direction: "ltr",
 	},
 	chip: {
 		paddingHorizontal: 16,
@@ -416,6 +420,7 @@ const styles = StyleSheet.create({
 	ageRow: {
 		flexDirection: "row",
 		gap: 20,
+		direction: "ltr",
 	},
 	ageInputWrap: {
 		flex: 1,
@@ -429,6 +434,7 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		flexWrap: "wrap",
 		gap: 8,
+		direction: "ltr",
 	},
 	toggleRow: {
 		flexDirection: "row",
@@ -445,8 +451,10 @@ const styles = StyleSheet.create({
 		gap: 12,
 		paddingHorizontal: 20,
 		paddingTop: 16,
+		paddingBottom: 16,
 		borderTopWidth: StyleSheet.hairlineWidth,
 		borderTopColor: buddiColors.surfaceBorder,
+		direction: "ltr",
 	},
 	resetButton: {
 		flex: 1,

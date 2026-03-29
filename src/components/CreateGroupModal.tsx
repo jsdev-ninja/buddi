@@ -557,7 +557,10 @@ export function CreateGroupModal({ visible, onClose, onSubmit, mode = 'create', 
 										/>
 									)}
 									{Platform.OS === 'ios' && showStartPicker && (
-										<Pressable onPress={() => setShowStartPicker(false)} style={styles.datePickerDone}>
+										<Pressable onPress={() => {
+											setShowStartPicker(false);
+											updateField('startDate', startDateObj.toISOString().slice(0, 10));
+										}} style={styles.datePickerDone}>
 											<Text style={styles.datePickerDoneText}>Done</Text>
 										</Pressable>
 									)}
@@ -591,7 +594,10 @@ export function CreateGroupModal({ visible, onClose, onSubmit, mode = 'create', 
 										/>
 									)}
 									{Platform.OS === 'ios' && showEndPicker && (
-										<Pressable onPress={() => setShowEndPicker(false)} style={styles.datePickerDone}>
+										<Pressable onPress={() => {
+											setShowEndPicker(false);
+											updateField('endDate', endDateObj.toISOString().slice(0, 10));
+										}} style={styles.datePickerDone}>
 											<Text style={styles.datePickerDoneText}>Done</Text>
 										</Pressable>
 									)}
