@@ -1,5 +1,6 @@
 import { buddiColors } from "@/constants/theme";
 import { Feather } from "@expo/vector-icons";
+import Slider from "@react-native-community/slider";
 import React, { useState } from "react";
 import {
 	Modal,
@@ -8,6 +9,7 @@ import {
 	StyleSheet,
 	Switch,
 	Text,
+	TextInput,
 	TouchableOpacity,
 	View,
 } from "react-native";
@@ -113,24 +115,17 @@ export function DiscoverFilterModal({
 							<Text style={styles.sectionTitle}>Distance</Text>
 							<View style={styles.sliderRow}>
 								<Text style={styles.sliderLabel}>Up to {filter.distanceKm} km</Text>
-								<View style={styles.sliderTrack}>
-									<View
-										style={[
-											styles.sliderFill,
-											{ width: `${((filter.distanceKm - sliderMin) / (sliderMax - sliderMin)) * 100}%` },
-										]}
-									/>
-									<Pressable
-										style={[
-											styles.sliderThumb,
-											{
-												left: `${((filter.distanceKm - sliderMin) / (sliderMax - sliderMin)) * 100}%`,
-												marginLeft: -12,
-											},
-										]}
-										onPressIn={() => {}}
-									/>
-								</View>
+								<Slider
+									style={styles.slider}
+									minimumValue={sliderMin}
+									maximumValue={sliderMax}
+									step={1}
+									value={filter.distanceKm}
+									onValueChange={(v) => setFilter((f) => ({ ...f, distanceKm: Math.round(v) }))}
+									minimumTrackTintColor={buddiColors.primary}
+									maximumTrackTintColor={buddiColors.surfaceMuted}
+									thumbTintColor={buddiColors.primary}
+								/>
 								<View style={styles.sliderButtons}>
 									{[10, 25, 50, 75, 100].map((km) => (
 										<TouchableOpacity
@@ -186,46 +181,39 @@ export function DiscoverFilterModal({
 							<Text style={styles.sectionTitle}>Age range</Text>
 							<View style={styles.ageRow}>
 								<View style={styles.ageInputWrap}>
-									<Text style={styles.ageLabel}>Min</Text>
-									<View style={styles.ageChips}>
-										{[18, 25, 30, 35, 40].map((a) => (
-											<TouchableOpacity
-												key={`min-${a}`}
-												style={[styles.chipSmall, filter.ageMin === a && styles.chipActive]}
-												onPress={() => setFilter((f) => ({ ...f, ageMin: a }))}
-											>
-												<Text
-													style={[
-														styles.chipSmallText,
-														filter.ageMin === a && styles.chipTextActive,
-													]}
-												>
-													{a}
-												</Text>
-											</TouchableOpacity>
-										))}
-									</View>
+									<Text style={styles.ageLabel}>Min age</Text>
+									<TextInput
+										style={styles.ageInput}
+										keyboardType="number-pad"
+										maxLength={3}
+										value={String(filter.ageMin)}
+										onChangeText={(v) => {
+											const n = parseInt(v, 10);
+											if (!isNaN(n) && n >= 1 && n <= 99) setFilter((f) => ({ ...f, ageMin: n }));
+											else if (v === '') setFilter((f) => ({ ...f, ageMin: 18 }));
+										}}
+										placeholder="18"
+										placeholderTextColor={buddiColors.textTertiary}
+									/>
+								</View>
+								<View style={styles.ageSeparatorWrap}>
+									<Text style={styles.ageSeparator}>–</Text>
 								</View>
 								<View style={styles.ageInputWrap}>
-									<Text style={styles.ageLabel}>Max</Text>
-									<View style={styles.ageChips}>
-										{[30, 40, 50, 60, 99].map((a) => (
-											<TouchableOpacity
-												key={`max-${a}`}
-												style={[styles.chipSmall, filter.ageMax === a && styles.chipActive]}
-												onPress={() => setFilter((f) => ({ ...f, ageMax: a }))}
-											>
-												<Text
-													style={[
-														styles.chipSmallText,
-														filter.ageMax === a && styles.chipTextActive,
-													]}
-												>
-													{a === 99 ? "99+" : a}
-												</Text>
-											</TouchableOpacity>
-										))}
-									</View>
+									<Text style={styles.ageLabel}>Max age</Text>
+									<TextInput
+										style={styles.ageInput}
+										keyboardType="number-pad"
+										maxLength={3}
+										value={String(filter.ageMax)}
+										onChangeText={(v) => {
+											const n = parseInt(v, 10);
+											if (!isNaN(n) && n >= 1 && n <= 99) setFilter((f) => ({ ...f, ageMax: n }));
+											else if (v === '') setFilter((f) => ({ ...f, ageMax: 99 }));
+										}}
+										placeholder="99"
+										placeholderTextColor={buddiColors.textTertiary}
+									/>
 								</View>
 							</View>
 						</View>
@@ -337,35 +325,12 @@ const styles = StyleSheet.create({
 	sliderLabel: {
 		fontSize: 14,
 		color: buddiColors.textSecondary,
+		marginBottom: 4,
+	},
+	slider: {
+		width: "100%",
+		height: 40,
 		marginBottom: 8,
-	},
-	sliderTrack: {
-		height: 8,
-		borderRadius: 4,
-		backgroundColor: buddiColors.surfaceMuted,
-		position: "relative",
-		marginBottom: 12,
-	},
-	sliderFill: {
-		position: "absolute",
-		left: 0,
-		top: 0,
-		bottom: 0,
-		backgroundColor: buddiColors.primary,
-		borderRadius: 4,
-	},
-	sliderThumb: {
-		position: "absolute",
-		top: -4,
-		width: 24,
-		height: 24,
-		borderRadius: 12,
-		backgroundColor: buddiColors.primary,
-		shadowColor: "#000",
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.2,
-		shadowRadius: 2,
-		elevation: 3,
 	},
 	sliderButtons: {
 		flexDirection: "row",
@@ -405,36 +370,37 @@ const styles = StyleSheet.create({
 		color: buddiColors.primaryDark,
 		fontWeight: "600",
 	},
-	chipSmall: {
-		paddingHorizontal: 12,
-		paddingVertical: 8,
-		borderRadius: 16,
-		backgroundColor: buddiColors.surfaceMuted,
-		borderWidth: 1,
-		borderColor: buddiColors.surfaceBorder,
-	},
-	chipSmallText: {
-		fontSize: 13,
-		color: buddiColors.textPrimary,
-	},
 	ageRow: {
 		flexDirection: "row",
-		gap: 20,
+		alignItems: "flex-end",
+		gap: 8,
 		direction: "ltr",
 	},
 	ageInputWrap: {
 		flex: 1,
 	},
 	ageLabel: {
-		fontSize: 12,
+		fontSize: 13,
 		color: buddiColors.textSecondary,
-		marginBottom: 8,
+		marginBottom: 6,
 	},
-	ageChips: {
-		flexDirection: "row",
-		flexWrap: "wrap",
-		gap: 8,
-		direction: "ltr",
+	ageInput: {
+		backgroundColor: buddiColors.surfaceMuted,
+		borderWidth: 1,
+		borderColor: buddiColors.surfaceBorder,
+		borderRadius: 10,
+		paddingHorizontal: 14,
+		paddingVertical: 10,
+		fontSize: 16,
+		color: buddiColors.textPrimary,
+		textAlign: "center",
+	},
+	ageSeparatorWrap: {
+		paddingBottom: 10,
+	},
+	ageSeparator: {
+		fontSize: 20,
+		color: buddiColors.textSecondary,
 	},
 	toggleRow: {
 		flexDirection: "row",

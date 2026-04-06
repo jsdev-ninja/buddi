@@ -137,27 +137,36 @@ function useNotificationResponseListener() {
 			const type = data?.type;
 			if (!type) return;
 
-			switch (type) {
-				case "new_message":
-					if (data.conversationId) {
-						router.push(`/chat?id=${data.conversationId}`);
-					} else {
-						router.push("/(tabs)/messages" as any);
-					}
-					break;
-				case "match":
-					router.push("/(tabs)/matches" as any);
-					break;
-				case "profile_like":
-				case "group_like":
-					router.push("/(tabs)/index" as any);
-					break;
-				case "group_match":
-					router.push("/(tabs)/matches" as any);
-					break;
-				default:
-					router.push("/(tabs)/index" as any);
-			}
+			// Delay to ensure router is ready when app opens cold from a notification tap
+			setTimeout(() => {
+				switch (type) {
+					case "new_message":
+						if (data.conversationId) {
+							router.push(`/chat?id=${data.conversationId}` as any);
+						} else {
+							router.push("/(tabs)/messages" as any);
+						}
+						break;
+					case "match":
+						router.push("/(tabs)/matches" as any);
+						break;
+					case "profile_like":
+						router.push("/(tabs)/index" as any);
+						break;
+					case "group_like":
+						if (data.groupId) {
+							router.push(`/group/${data.groupId}` as any);
+						} else {
+							router.push("/(tabs)/adventures" as any);
+						}
+						break;
+					case "group_match":
+						router.push("/(tabs)/matches" as any);
+						break;
+					default:
+						router.push("/(tabs)/index" as any);
+				}
+			}, 300);
 		});
 
 		return () => sub.remove();

@@ -19,6 +19,13 @@ export const profileSchema = z.object({
 	photos: z.array(z.string().url()).optional(), // Array of photo URLs (max 6, first is main profile picture)
 	verified: z.boolean().optional(), // Verification status
 	interests: z.array(z.string()).optional(), // Array of interest tags
+	prompts: z.array(z.object({ question: z.string(), answer: z.string() })).optional(), // Q&A prompts
+	completedAdventures: z.array(z.object({
+		title: z.string(),
+		photo: z.string().optional(),
+		startDate: z.string().optional(),
+		endDate: z.string().optional(),
+	})).optional(),
 
 	// Timestamps (optional - will be set when creating)
 	createdAt: z.number().optional(), // JavaScript timestamp (Date.now())

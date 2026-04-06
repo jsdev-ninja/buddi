@@ -6,10 +6,12 @@ import { useAuth } from '@/context/AuthProvider';
 import { firebaseApi } from '@/services/firebase';
 import { Feather } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as ImagePicker from 'expo-image-picker';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
 	ActivityIndicator,
 	Alert,
+	Image,
 	Modal,
 	Platform,
 	Pressable,
@@ -69,6 +71,40 @@ export function CreateGroupModal({ visible, onClose, onSubmit, mode = 'create', 
 	const [showEndPicker, setShowEndPicker] = useState(false);
 	const [startDateObj, setStartDateObj] = useState<Date>(new Date());
 	const [endDateObj, setEndDateObj] = useState<Date>(new Date());
+
+	const pickImage = async (useCamera: boolean) => {
+		if (useCamera) {
+			const { status } = await ImagePicker.requestCameraPermissionsAsync();
+			if (status !== 'granted') {
+				Alert.alert('Permission needed', 'Camera access is required to take a photo.');
+				return;
+			}
+			const result = await ImagePicker.launchCameraAsync({
+				mediaTypes: ['images'],
+				allowsEditing: true,
+				aspect: [16, 9],
+				quality: 0.8,
+			});
+			if (!result.canceled) {
+				updateField('groupPhoto', result.assets[0].uri);
+			}
+		} else {
+			const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+			if (status !== 'granted') {
+				Alert.alert('Permission needed', 'Photo library access is required to choose a photo.');
+				return;
+			}
+			const result = await ImagePicker.launchImageLibraryAsync({
+				mediaTypes: ['images'],
+				allowsEditing: true,
+				aspect: [16, 9],
+				quality: 0.8,
+			});
+			if (!result.canceled) {
+				updateField('groupPhoto', result.assets[0].uri);
+			}
+		}
+	};
 
 	// Fetch matches and their profiles when step 3 is shown (for participant selection)
 	const fetchMatchProfiles = useCallback(async () => {
@@ -637,14 +673,37 @@ export function CreateGroupModal({ visible, onClose, onSubmit, mode = 'create', 
 
 								<View style={styles.field}>
 									<Text style={styles.label}>Group Photo</Text>
-									<View style={styles.photoContainer}>
-										<Pressable style={styles.photoButton}>
-											<Feather name="camera" size={32} color={buddiColors.textSecondary} />
-										</Pressable>
-										<Pressable style={styles.choosePhotoButton}>
-											<Text style={styles.choosePhotoButtonText}>Choose Photo</Text>
-										</Pressable>
-									</View>
+									{formData.groupPhoto ? (
+										<View style={styles.photoPreviewContainer}>
+											<Image
+												source={{ uri: formData.groupPhoto }}
+												style={styles.photoPreview}
+												resizeMode="cover"
+											/>
+											<Pressable
+												style={styles.photoRemoveButton}
+												onPress={() => updateField('groupPhoto', null)}
+											>
+												<Feather name="x" size={16} color="#fff" />
+											</Pressable>
+										</View>
+									) : (
+										<View style={styles.photoContainer}>
+											<Pressable
+												style={styles.photoButton}
+												onPress={() => pickImage(true)}
+											>
+												<Feather name="camera" size={32} color={buddiColors.textSecondary} />
+												<Text style={styles.photoButtonLabel}>Camera</Text>
+											</Pressable>
+											<Pressable
+												style={styles.choosePhotoButton}
+												onPress={() => pickImage(false)}
+											>
+												<Text style={styles.choosePhotoButtonText}>Choose Photo</Text>
+											</Pressable>
+										</View>
+									)}
 								</View>
 							</View>
 						)}
@@ -767,6 +826,7 @@ const styles = StyleSheet.create({
 	},
 	header: {
 		flexDirection: 'row',
+		direction: 'ltr',
 		alignItems: 'center',
 		justifyContent: 'space-between',
 		paddingHorizontal: 20,
@@ -777,6 +837,7 @@ const styles = StyleSheet.create({
 	},
 	headerLeft: {
 		flexDirection: 'row',
+		direction: 'ltr',
 		alignItems: 'center',
 		gap: 12,
 	},
@@ -1014,12 +1075,17 @@ const styles = StyleSheet.create({
 		gap: 12,
 	},
 	photoButton: {
-		width: 120,
-		height: 120,
+		width: 100,
+		height: 100,
 		backgroundColor: buddiColors.surfaceMuted,
 		borderRadius: 12,
 		alignItems: 'center',
 		justifyContent: 'center',
+		gap: 6,
+	},
+	photoButtonLabel: {
+		fontSize: 12,
+		color: buddiColors.textSecondary,
 	},
 	choosePhotoButton: {
 		paddingHorizontal: 20,
@@ -1032,6 +1098,27 @@ const styles = StyleSheet.create({
 		fontSize: 14,
 		fontWeight: '600',
 		color: buddiColors.textPrimary,
+	},
+	photoPreviewContainer: {
+		position: 'relative',
+		borderRadius: 12,
+		overflow: 'hidden',
+	},
+	photoPreview: {
+		width: '100%',
+		height: 180,
+		borderRadius: 12,
+	},
+	photoRemoveButton: {
+		position: 'absolute',
+		top: 8,
+		right: 8,
+		width: 28,
+		height: 28,
+		borderRadius: 14,
+		backgroundColor: 'rgba(0,0,0,0.6)',
+		alignItems: 'center',
+		justifyContent: 'center',
 	},
 	searchContainer: {
 		flexDirection: 'row',

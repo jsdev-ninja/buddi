@@ -3,23 +3,29 @@ import { useAuth } from '@/context/AuthProvider';
 import { setCurrentChatConversationId } from '@/context/NotificationProvider';
 import { firebaseApi } from '@/services/firebase';
 import { Feather } from '@expo/vector-icons';
+import { Audio } from 'expo-av';
+import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
+  Modal,
   Platform,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { Composer, GiftedChat, IMessage, InputToolbar, Send, User } from 'react-native-gifted-chat';
+import { Bubble, Composer, GiftedChat, IMessage, InputToolbar, Send, User } from 'react-native-gifted-chat';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type FirebaseMessage = {
   id: string;
   text: string;
+  image?: string;
+  audio?: string;
   timestamp: string;
   isSent: boolean;
   createdAt: number;
@@ -30,12 +36,73 @@ function toGiftedMessage(m: FirebaseMessage, currentUserId: string): IMessage {
   return {
     _id: m.id,
     text: m.text,
+    image: m.image,
+    audio: m.audio,
     createdAt: new Date(m.createdAt),
     user: {
       _id: m.userId,
       name: m.userId === currentUserId ? 'You' : undefined,
     },
   };
+}
+
+function AudioMessage({ uri, isMine }: { uri: string; isMine?: boolean }) {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const soundRef = useRef<Audio.Sound | null>(null);
+
+  const toggle = async () => {
+    try {
+      if (isPlaying && soundRef.current) {
+        await soundRef.current.stopAsync();
+        await soundRef.current.unloadAsync();
+        soundRef.current = null;
+        setIsPlaying(false);
+      } else {
+        await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
+        const { sound } = await Audio.Sound.createAsync({ uri });
+        soundRef.current = sound;
+        setIsPlaying(true);
+        sound.setOnPlaybackStatusUpdate((status) => {
+          if (status.isLoaded && status.didJustFinish) {
+            setIsPlaying(false);
+            sound.unloadAsync();
+            soundRef.current = null;
+          }
+        });
+        await sound.playAsync();
+      }
+    } catch (e) {
+      console.error('Audio playback error:', e);
+    }
+  };
+
+  useEffect(() => {
+    return () => { soundRef.current?.unloadAsync(); };
+  }, []);
+
+  return (
+    <Pressable style={styles.audioMsg} onPress={toggle}>
+      <Feather
+        name={isPlaying ? 'pause-circle' : 'play-circle'}
+        size={28}
+        color={isMine ? '#fff' : buddiColors.primary}
+      />
+      <View style={styles.audioWaveform}>
+        {Array.from({ length: 12 }).map((_, i) => (
+          <View
+            key={i}
+            style={[
+              styles.audioBar,
+              { height: 6 + Math.random() * 14, backgroundColor: isMine ? 'rgba(255,255,255,0.6)' : buddiColors.surfaceBorder },
+            ]}
+          />
+        ))}
+      </View>
+      <Text style={[styles.audioLabel, { color: isMine ? 'rgba(255,255,255,0.8)' : buddiColors.textSecondary }]}>
+        Voice
+      </Text>
+    </Pressable>
+  );
 }
 
 export default function ChatScreen() {
@@ -51,6 +118,9 @@ export default function ChatScreen() {
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [firebaseMessages, setFirebaseMessages] = useState<FirebaseMessage[]>([]);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isSendingMedia, setIsSendingMedia] = useState(false);
+  const recordingRef = useRef<Audio.Recording | null>(null);
   const insets = useSafeAreaInsets();
 
   const giftedUser: User = useMemo(
@@ -137,6 +207,68 @@ export default function ChatScreen() {
     [id, user?.uid]
   );
 
+  const pickImage = useCallback(async () => {
+    if (!id || !user?.uid) return;
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Photo library access is required.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.7,
+    });
+    if (result.canceled) return;
+    try {
+      setIsSendingMedia(true);
+      const url = await firebaseApi.storage.uploadChatMedia(result.assets[0].uri, id, 'image');
+      await firebaseApi.chat.sendMessage(id, '', { image: url });
+    } catch (e) {
+      console.error('Error sending image:', e);
+      Alert.alert('Error', 'Could not send image.');
+    } finally {
+      setIsSendingMedia(false);
+    }
+  }, [id, user?.uid]);
+
+  const startRecording = useCallback(async () => {
+    try {
+      const perm = await Audio.requestPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Permission needed', 'Microphone access is required for voice messages.');
+        return;
+      }
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      recordingRef.current = recording;
+      setIsRecording(true);
+    } catch (e) {
+      console.error('Error starting recording:', e);
+    }
+  }, []);
+
+  const stopRecording = useCallback(async () => {
+    if (!recordingRef.current || !id || !user?.uid) return;
+    try {
+      setIsRecording(false);
+      await recordingRef.current.stopAndUnloadAsync();
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      const uri = recordingRef.current.getURI();
+      recordingRef.current = null;
+      if (!uri) return;
+      setIsSendingMedia(true);
+      const url = await firebaseApi.storage.uploadChatMedia(uri, id, 'audio');
+      await firebaseApi.chat.sendMessage(id, '', { audio: url });
+    } catch (e) {
+      console.error('Error sending voice message:', e);
+      Alert.alert('Error', 'Could not send voice message.');
+    } finally {
+      setIsSendingMedia(false);
+    }
+  }, [id, user?.uid]);
+
   const renderLoading = useCallback(
     () => (
       <View style={styles.loadingContainer}>
@@ -167,7 +299,12 @@ export default function ChatScreen() {
       </View>
 
       {/* More menu modal */}
-      {showMoreMenu && (
+      <Modal
+        visible={showMoreMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowMoreMenu(false)}
+      >
         <Pressable style={styles.moreMenuOverlay} onPress={() => setShowMoreMenu(false)}>
           <View style={styles.moreMenuBox} onStartShouldSetResponder={() => true}>
             {!isGroupChat && otherUserId && (
@@ -214,11 +351,11 @@ export default function ChatScreen() {
               }}
             >
               <Feather name="settings" size={20} color={buddiColors.textPrimary} />
-              <Text style={styles.moreMenuUnmatchText}>Settings</Text>
+              <Text style={styles.moreMenuItemText}>Settings</Text>
             </Pressable>
           </View>
         </Pressable>
-      )}
+      </Modal>
 
       {/* Gifted Chat - handles keyboard, list, and input with best practices */}
       <View style={styles.chatWrapper}>
@@ -247,30 +384,85 @@ export default function ChatScreen() {
           }}
           renderInputToolbar={(inputToolbarProps) => (
             <View style={[styles.inputToolbarWrapper, { paddingBottom: Math.max(insets.bottom, 6) }]}>
-              <InputToolbar
-                {...inputToolbarProps}
-                containerStyle={[styles.inputToolbar, styles.inputToolbarNoBorder]}
-                primaryStyle={styles.inputToolbarPrimary}
-                renderComposer={(composerProps) => (
-                  <View style={styles.composerWrap}>
-                    <Composer
-                      {...composerProps}
-                      textInputProps={{
-                        ...composerProps.textInputProps,
-                        style: [styles.textInput, composerProps.textInputProps?.style],
-                      }}
-                    />
-                  </View>
-                )}
-                renderSend={(sendProps) => (
-                  <Send
-                    {...sendProps}
-                    containerStyle={styles.sendWrap}
-                    textStyle={styles.sendText}
+              {isSendingMedia && (
+                <View style={styles.mediaUploading}>
+                  <ActivityIndicator size="small" color={buddiColors.primary} />
+                  <Text style={styles.mediaUploadingText}>Sending...</Text>
+                </View>
+              )}
+              <View style={styles.toolbarRow}>
+                <Pressable style={styles.mediaBtn} onPress={pickImage}>
+                  <Feather name="image" size={22} color={buddiColors.primary} />
+                </Pressable>
+                <Pressable
+                  style={[styles.mediaBtn, isRecording && styles.mediaBtnRecording]}
+                  onPress={isRecording ? stopRecording : startRecording}
+                >
+                  <Feather name="mic" size={22} color={isRecording ? '#fff' : buddiColors.primary} />
+                </Pressable>
+                <View style={styles.composerFlex}>
+                  <InputToolbar
+                    {...inputToolbarProps}
+                    containerStyle={[styles.inputToolbar, styles.inputToolbarNoBorder]}
+                    primaryStyle={styles.inputToolbarPrimary}
+                    renderComposer={(composerProps) => (
+                      <View style={styles.composerWrap}>
+                        <Composer
+                          {...composerProps}
+                          textInputProps={{
+                            ...composerProps.textInputProps,
+                            style: [styles.textInput, composerProps.textInputProps?.style],
+                          }}
+                        />
+                      </View>
+                    )}
+                    renderSend={(sendProps) => (
+                      <Send
+                        {...sendProps}
+                        containerStyle={styles.sendWrap}
+                        textStyle={styles.sendText}
+                      />
+                    )}
                   />
-                )}
-              />
+                </View>
+              </View>
             </View>
+          )}
+          renderMessageImage={(props) => {
+            const imgUrl = props.currentMessage?.image;
+            if (!imgUrl) return null;
+            return (
+              <Pressable onPress={() => {}}>
+                <Image
+                  source={{ uri: imgUrl }}
+                  style={styles.messageImage}
+                  resizeMode="cover"
+                />
+              </Pressable>
+            );
+          }}
+          renderCustomView={(props) => {
+            const audioUrl = (props.currentMessage as any)?.audio;
+            if (!audioUrl) return null;
+            return (
+              <AudioMessage
+                uri={audioUrl}
+                isMine={props.currentMessage?.user?._id === user?.uid}
+              />
+            );
+          }}
+          renderBubble={(bubbleProps) => (
+            <Bubble
+              {...bubbleProps}
+              wrapperStyle={{
+                right: { backgroundColor: buddiColors.primary },
+                left: { backgroundColor: buddiColors.surfaceMuted },
+              }}
+              textStyle={{
+                right: { color: '#fff' },
+                left: { color: buddiColors.textPrimary },
+              }}
+            />
           )}
           renderDay={({ createdAt }) => {
             const date = createdAt instanceof Date ? createdAt : new Date(createdAt);
@@ -408,6 +600,65 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: buddiColors.textSecondary,
   },
+  toolbarRow: {
+    flexDirection: 'row',
+    direction: 'ltr',
+    alignItems: 'center',
+    gap: 4,
+  },
+  composerFlex: {
+    flex: 1,
+  },
+  mediaBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: buddiColors.surfaceMuted,
+  },
+  mediaBtnRecording: {
+    backgroundColor: buddiColors.dangerText || '#e53e3e',
+  },
+  mediaUploading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 4,
+  },
+  mediaUploadingText: {
+    fontSize: 12,
+    color: buddiColors.textSecondary,
+  },
+  messageImage: {
+    width: 200,
+    height: 200,
+    borderRadius: 12,
+    margin: 4,
+  },
+  audioMsg: {
+    flexDirection: 'row',
+    direction: 'ltr',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  audioWaveform: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    flex: 1,
+  },
+  audioBar: {
+    width: 3,
+    borderRadius: 2,
+    backgroundColor: buddiColors.surfaceBorder,
+  },
+  audioLabel: {
+    fontSize: 11,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -415,7 +666,7 @@ const styles = StyleSheet.create({
     paddingVertical: 40,
   },
   moreMenuOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'flex-start',
     alignItems: 'flex-end',
@@ -443,6 +694,11 @@ const styles = StyleSheet.create({
   moreMenuUnmatchText: {
     fontSize: 16,
     color: buddiColors.dangerText,
+    fontWeight: '500',
+  },
+  moreMenuItemText: {
+    fontSize: 16,
+    color: buddiColors.textPrimary,
     fontWeight: '500',
   },
   moreMenuPlaceholder: {

@@ -1,3 +1,5 @@
+import { EditAnswersModal } from '@/components/EditAnswersModal';
+import { EditCompletedAdventuresModal } from '@/components/EditCompletedAdventuresModal';
 import { EditProfileModal } from '@/components/EditProfileModal';
 import { LogoIcon } from '@/components/LogoIcon';
 import { SettingsDropdown } from '@/components/SettingsDropdown';
@@ -19,6 +21,8 @@ export default function ProfileScreen() {
   const router = useRouter();
   const [showInterests, setShowInterests] = useState(true);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showAnswersModal, setShowAnswersModal] = useState(false);
+  const [showAdventuresModal, setShowAdventuresModal] = useState(false);
   const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [profile, setProfile] = useState<Profile & {
@@ -65,7 +69,7 @@ export default function ProfileScreen() {
               : require('@/assets/images/react-logo.png'),
             level: prev.level, // Keep UI-only fields
             rating: prev.rating,
-            hasAnswers: prev.hasAnswers,
+            hasAnswers: !!(firestoreProfile.prompts?.some((p) => p.answer?.trim())),
           }));
         }
       } catch (error) {
@@ -173,13 +177,22 @@ export default function ProfileScreen() {
         <Card style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>My Answers</Text>
-            <Pressable>
+            <Pressable onPress={() => setShowAnswersModal(true)}>
               <Feather name="edit" size={18} color={buddiColors.textSecondary} />
             </Pressable>
           </View>
-          {!profile.hasAnswers && (
+          {profile.prompts && profile.prompts.some((p) => p.answer?.trim()) ? (
+            <View style={styles.promptsList}>
+              {profile.prompts.filter((p) => p.answer?.trim()).map((p, i) => (
+                <View key={i} style={styles.promptItem}>
+                  <Text style={styles.promptQuestion}>{p.question}</Text>
+                  <Text style={styles.promptAnswer}>{p.answer}</Text>
+                </View>
+              ))}
+            </View>
+          ) : (
             <Text style={styles.emptyText}>
-              You haven&apos;t answered any questions yet. Edit your profile to add them!
+              You haven&apos;t answered any questions yet. Tap the edit icon to add them!
             </Text>
           )}
         </Card>
@@ -248,11 +261,32 @@ export default function ProfileScreen() {
         <Card style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Completed Adventures</Text>
-            <Pressable>
-              <Feather name="plus" size={20} color={buddiColors.textSecondary} />
+            <Pressable onPress={() => setShowAdventuresModal(true)}>
+              <Feather name="edit" size={18} color={buddiColors.textSecondary} />
             </Pressable>
           </View>
-          <Text style={styles.emptyText}>No completed adventures yet.</Text>
+          {profile.completedAdventures && profile.completedAdventures.length > 0 ? (
+            <View style={styles.adventuresList}>
+              {profile.completedAdventures.map((adv, i) => (
+                <View key={i} style={styles.adventureItem}>
+                  {adv.photo
+                    ? <Image source={{ uri: adv.photo }} style={styles.adventurePhoto} />
+                    : <View style={styles.adventurePhotoPlaceholder}><Feather name="map" size={16} color={buddiColors.textTertiary} /></View>
+                  }
+                  <View style={styles.adventureInfo}>
+                    <Text style={styles.adventureTitle}>{adv.title}</Text>
+                    {(adv.startDate || adv.endDate) && (
+                      <Text style={styles.adventureDates}>
+                        {adv.startDate}{adv.startDate && adv.endDate ? ' • ' : ''}{adv.endDate}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.emptyText}>No completed adventures yet.</Text>
+          )}
         </Card>
 
         {/* Edit Adventure Plan Button */}
@@ -299,6 +333,32 @@ export default function ProfileScreen() {
         </Pressable>
       </ScrollView>
 
+      <EditCompletedAdventuresModal
+        visible={showAdventuresModal}
+        onClose={() => setShowAdventuresModal(false)}
+        initialAdventures={profile.completedAdventures}
+        onSave={async (completedAdventures) => {
+          if (!user?.uid || !profile.id) return;
+          const updated = await firebaseApi.profiles.update(profile.id, { completedAdventures });
+          setProfile((prev) => ({ ...prev, completedAdventures: updated.completedAdventures }));
+        }}
+      />
+
+      <EditAnswersModal
+        visible={showAnswersModal}
+        onClose={() => setShowAnswersModal(false)}
+        initialPrompts={profile.prompts}
+        onSave={async (prompts) => {
+          if (!user?.uid || !profile.id) return;
+          const updated = await firebaseApi.profiles.update(profile.id, { prompts });
+          setProfile((prev) => ({
+            ...prev,
+            prompts: updated.prompts,
+            hasAnswers: !!(updated.prompts?.some((p) => p.answer?.trim())),
+          }));
+        }}
+      />
+
       <EditProfileModal
         visible={showEditModal}
         onClose={() => setShowEditModal(false)}
@@ -323,7 +383,7 @@ export default function ProfileScreen() {
                 : require('@/assets/images/react-logo.png'),
               level: prev.level, // Keep UI-only fields
               rating: prev.rating,
-              hasAnswers: prev.hasAnswers,
+              hasAnswers: !!(updatedProfile.prompts?.some((p) => p.answer?.trim())),
             }));
             
             setShowEditModal(false);
@@ -529,6 +589,60 @@ const styles = StyleSheet.create({
     color: buddiColors.textSecondary,
     fontStyle: 'italic',
     flexWrap: 'wrap',
+  },
+  adventuresList: {
+    gap: 10,
+    marginTop: 4,
+  },
+  adventureItem: {
+    flexDirection: 'row',
+    direction: 'ltr',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: buddiColors.surfaceMuted,
+    borderRadius: 10,
+    padding: 10,
+  },
+  adventurePhoto: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+  },
+  adventurePhotoPlaceholder: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: buddiColors.surfaceBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adventureInfo: { flex: 1 },
+  adventureTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: buddiColors.textPrimary,
+  },
+  adventureDates: {
+    fontSize: 12,
+    color: buddiColors.textSecondary,
+    marginTop: 2,
+  },
+  promptsList: {
+    gap: 16,
+    marginTop: 4,
+  },
+  promptItem: {
+    gap: 4,
+  },
+  promptQuestion: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: buddiColors.textSecondary,
+  },
+  promptAnswer: {
+    fontSize: 15,
+    color: buddiColors.textPrimary,
+    lineHeight: 22,
   },
   photosContainer: {
     flexDirection: 'row',

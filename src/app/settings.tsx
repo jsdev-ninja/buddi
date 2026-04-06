@@ -206,7 +206,6 @@ export default function SettingsScreen() {
 					onPress={savePrefs}
 					disabled={saving}
 				>
-					<Feather name="save" size={20} color="#fff" style={styles.buttonIcon} />
 					<Text style={styles.primaryButtonText}>
 						{saving ? "Saving…" : "Save Settings"}
 					</Text>
@@ -266,6 +265,7 @@ const styles = StyleSheet.create({
 	},
 	header: {
 		flexDirection: "row",
+		direction: "ltr",
 		alignItems: "center",
 		paddingHorizontal: 16,
 		paddingVertical: 12,

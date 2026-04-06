@@ -688,6 +688,23 @@ export const firebaseApi = {
 				throw error;
 			}
 		},
+		uploadChatMedia: async (uri: string, conversationId: string, type: "image" | "audio"): Promise<string> => {
+			try {
+				if (!auth.currentUser) {
+					throw new Error("User must be authenticated to upload media");
+				}
+				const response = await fetch(uri);
+				const blob = await response.blob();
+				const ext = type === "image" ? "jpg" : "m4a";
+				const filename = `chat/${conversationId}/${type}_${Date.now()}.${ext}`;
+				const storageRef = ref(firebaseStorage, filename);
+				await uploadBytes(storageRef, blob);
+				return await getDownloadURL(storageRef);
+			} catch (error) {
+				console.error("Error uploading chat media:", error);
+				throw error;
+			}
+		},
 		deletePhoto: async (photoUrl: string): Promise<void> => {
 			try {
 				// Extract the path from the URL
@@ -1131,7 +1148,11 @@ export const firebaseApi = {
 			}
 		},
 		// Send a message
-		sendMessage: async (conversationId: string, text: string): Promise<string> => {
+		sendMessage: async (
+			conversationId: string,
+			text: string,
+			extra?: { image?: string; audio?: string }
+		): Promise<string> => {
 			try {
 				if (!auth.currentUser) {
 					throw new Error("User must be authenticated to send a message");
@@ -1140,18 +1161,21 @@ export const firebaseApi = {
 				const userId = auth.currentUser.uid;
 				const messageRef = doc(collection(db, "conversations", conversationId, "messages"));
 
-				const messageData = {
+				const messageData: Record<string, unknown> = {
 					userId,
 					text,
 					createdAt: Date.now(),
 				};
+				if (extra?.image) messageData.image = extra.image;
+				if (extra?.audio) messageData.audio = extra.audio;
 
 				await setDoc(messageRef, messageData);
 
 				// Update conversation's last message and timestamp
 				const conversationRef = doc(db, "conversations", conversationId);
+				const preview = extra?.image ? "📷 Photo" : extra?.audio ? "🎤 Voice message" : text;
 				await updateDoc(conversationRef, {
-					lastMessage: text,
+					lastMessage: preview,
 					lastMessageAt: Date.now(),
 					updatedAt: Date.now(),
 				});
@@ -1166,6 +1190,8 @@ export const firebaseApi = {
 		getMessages: async (conversationId: string): Promise<{
 			id: string;
 			text: string;
+			image?: string;
+			audio?: string;
 			timestamp: string;
 			isSent: boolean;
 			createdAt: number;
@@ -1186,6 +1212,8 @@ export const firebaseApi = {
 				const messages: {
 					id: string;
 					text: string;
+					image?: string;
+					audio?: string;
 					timestamp: string;
 					isSent: boolean;
 					createdAt: number;
@@ -1197,7 +1225,9 @@ export const firebaseApi = {
 					const createdAt = data.createdAt ?? 0;
 					messages.push({
 						id: doc.id,
-						text: data.text,
+						text: data.text ?? "",
+						image: data.image ?? undefined,
+						audio: data.audio ?? undefined,
 						timestamp: new Date(createdAt).toLocaleTimeString("en-US", {
 							hour: "2-digit",
 							minute: "2-digit",
@@ -1221,6 +1251,8 @@ export const firebaseApi = {
 			callback: (messages: {
 				id: string;
 				text: string;
+				image?: string;
+				audio?: string;
 				timestamp: string;
 				isSent: boolean;
 				createdAt: number;
@@ -1241,6 +1273,8 @@ export const firebaseApi = {
 				const messages: {
 					id: string;
 					text: string;
+					image?: string;
+					audio?: string;
 					timestamp: string;
 					isSent: boolean;
 					createdAt: number;
@@ -1252,7 +1286,9 @@ export const firebaseApi = {
 					const createdAt = data.createdAt ?? 0;
 					messages.push({
 						id: doc.id,
-						text: data.text,
+						text: data.text ?? "",
+						image: data.image ?? undefined,
+						audio: data.audio ?? undefined,
 						timestamp: new Date(createdAt).toLocaleTimeString("en-US", {
 							hour: "2-digit",
 							minute: "2-digit",
