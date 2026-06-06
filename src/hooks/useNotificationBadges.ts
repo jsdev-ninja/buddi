@@ -1,8 +1,7 @@
-import { firebaseApi } from "@/services/firebase";
+import { db, firebaseApi } from "@/services/firebase";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthProvider";
-
-const POLL_MS = 90 * 1000; // 90 seconds
 
 function getConversationId(userId1: string, userId2: string): string {
 	return [userId1, userId2].sort().join("_");
@@ -10,9 +9,9 @@ function getConversationId(userId1: string, userId2: string): string {
 
 /**
  * Returns badge counts for Messages and Matches tabs.
- * - messagesBadge: number of conversations (in-app "activity" indicator).
+ * - messagesBadge: number of conversations with unread messages.
  * - matchesBadge: number of matches that don't have a conversation yet ("new" matches).
- * Polls every 90s so the tab bar updates.
+ * Listens to conversations in real-time.
  */
 export function useNotificationBadges(): { messagesBadge: number; matchesBadge: number } {
 	const { user } = useAuth();
@@ -26,27 +25,40 @@ export function useNotificationBadges(): { messagesBadge: number; matchesBadge: 
 			return;
 		}
 
-		const fetch = async () => {
+		// Subscribe to conversations in real-time
+		const q = query(
+			collection(db, "conversations"),
+			where("participants", "array-contains", user.uid)
+		);
+
+		const unsubscribe = onSnapshot(q, async (snapshot) => {
+			let unreadCount = 0;
+			const convIds = new Set<string>();
+
+			snapshot.docs.forEach((docSnapshot) => {
+				const data = docSnapshot.data();
+				convIds.add(docSnapshot.id);
+				const count = data.unreadCount?.[user.uid] || 0;
+				if (count > 0) {
+					unreadCount++;
+				}
+			});
+
+			setMessagesBadge(unreadCount);
+
 			try {
-				const [convs, userMatches] = await Promise.all([
-					firebaseApi.chat.getConversations(user.uid),
-					firebaseApi.matches.getUserMatches(user.uid),
-				]);
-				const convIds = new Set(convs.map((c) => c.id));
+				const userMatches = await firebaseApi.matches.getUserMatches(user.uid);
 				const newMatches = userMatches.filter((m) => {
 					const cid = getConversationId(user.uid, m.userId);
 					return !convIds.has(cid);
 				});
-				setMessagesBadge(convs.length);
 				setMatchesBadge(newMatches.length);
-			} catch (e) {
+			} catch {
 				// ignore
 			}
-		};
+		});
 
-		fetch();
-		const interval = setInterval(fetch, POLL_MS);
-		return () => clearInterval(interval);
+		return () => unsubscribe();
 	}, [user?.uid]);
 
 	return { messagesBadge, matchesBadge };

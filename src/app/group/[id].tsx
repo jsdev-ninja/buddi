@@ -67,7 +67,7 @@ export default function GroupDetailScreen() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [groupLikes, setGroupLikes] = useState<LikerWithProfile[]>([]);
   const [addingUserId, setAddingUserId] = useState<string | null>(null);
-  const [userGroups, setUserGroups] = useAtom(userGroupsAtom);
+  const [, setUserGroups] = useAtom(userGroupsAtom);
 
   const fetchGroup = useCallback(async () => {
     if (!id) return;
@@ -273,9 +273,9 @@ export default function GroupDetailScreen() {
         {isParticipant && (
           <Pressable
             style={styles.chatButton}
-            onPress={() => router.push(`/chat?id=group_${group.id}`)}
+            onPress={() => router.push(`/chat?id=group_${group.id}&name=${encodeURIComponent(group.groupName || '')}`)}
           >
-            <Feather name="message-circle" size={20} color={buddiColors.textOnDark} />
+            <Feather name="message-circle" size={20} color={buddiColors.primary} />
             <Text style={styles.chatButtonText}>Group chat</Text>
           </Pressable>
         )}

@@ -125,6 +125,7 @@ const getGoogleSignin = (): GoogleSigninModule => {
 	}
 	try {
 		// Lazy-load native module so Expo Go can still boot the app.
+		// eslint-disable-next-line @typescript-eslint/no-require-imports
 		const mod = require("@react-native-google-signin/google-signin");
 		googleSignin = mod.GoogleSignin as GoogleSigninModule;
 		return googleSignin;
@@ -1049,11 +1050,19 @@ export const firebaseApi = {
 				const conversationDoc = await getDoc(conversationRef);
 
 				if (!conversationDoc.exists()) {
+					const unreadCount: Record<string, number> = {};
+					const roles: Record<string, string> = {};
+					allParticipants.forEach((pId) => {
+						unreadCount[pId] = 0;
+						roles[pId] = pId === userId ? "creator" : "member";
+					});
 					await setDoc(conversationRef, {
 						participants: allParticipants,
 						isGroup,
 						groupId: groupId || null,
 						groupName: groupName || null,
+						unreadCount,
+						roles,
 						createdAt: Date.now(),
 						updatedAt: Date.now(),
 						lastMessage: null,
@@ -1077,6 +1086,9 @@ export const firebaseApi = {
 			isGroup?: boolean;
 			participantIds: string[];
 			partnerKind?: "solo" | "couple";
+			unreadCount: number;
+			roles: Record<string, string>;
+			background: string | null;
 		}[]> => {
 			try {
 				const conversationsQuery = query(
@@ -1086,16 +1098,7 @@ export const firebaseApi = {
 				);
 
 				const snapshot = await getDocs(conversationsQuery);
-				const conversations: {
-					id: string;
-					name: string;
-					lastMessage?: string;
-					timestamp?: string;
-					members?: number;
-					isGroup?: boolean;
-					participantIds: string[];
-					partnerKind?: "solo" | "couple";
-				}[] = [];
+				const conversations: any[] = [];
 
 				for (const docSnapshot of snapshot.docs) {
 					const data = docSnapshot.data();
@@ -1125,6 +1128,9 @@ export const firebaseApi = {
 						isGroup: data.isGroup || false,
 						participantIds: data.participants,
 						partnerKind,
+						unreadCount: data.unreadCount?.[userId] || 0,
+						roles: data.roles || {},
+						background: data.background || null,
 					});
 				}
 
@@ -1134,11 +1140,72 @@ export const firebaseApi = {
 				throw error;
 			}
 		},
+		// Subscribe to conversations in real-time
+		subscribeToConversations: (
+			userId: string,
+			callback: (conversations: {
+				id: string;
+				name: string;
+				lastMessage?: string;
+				timestamp?: string;
+				members?: number;
+				isGroup?: boolean;
+				participantIds: string[];
+				partnerKind?: "solo" | "couple";
+				unreadCount: number;
+				roles: Record<string, string>;
+				background: string | null;
+			}[]) => void
+		): (() => void) => {
+			const conversationsQuery = query(
+				collection(db, "conversations"),
+				where("participants", "array-contains", userId),
+				orderBy("updatedAt", "desc")
+			);
+
+			return onSnapshot(conversationsQuery, async (snapshot) => {
+				const conversationsList: any[] = [];
+
+				for (const docSnapshot of snapshot.docs) {
+					const data = docSnapshot.data();
+					const otherParticipantIds = data.participants.filter((id: string) => id !== userId);
+
+					let name = data.groupName || "Unknown";
+					let partnerKind: "solo" | "couple" | undefined;
+					if (!data.isGroup && otherParticipantIds.length > 0) {
+						const otherProfile = await firebaseApi.profiles.getProfile(otherParticipantIds[0]);
+						name = getDisplayName(otherProfile);
+						partnerKind = otherProfile?.kind ?? "solo";
+					}
+
+					const lastMessageAt = data.lastMessageAt;
+					const timestamp = lastMessageAt
+						? new Date(lastMessageAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })
+						: undefined;
+
+					conversationsList.push({
+						id: docSnapshot.id,
+						name,
+						lastMessage: data.lastMessage || undefined,
+						timestamp,
+						members: data.participants.length,
+						isGroup: data.isGroup || false,
+						participantIds: data.participants,
+						partnerKind,
+						unreadCount: data.unreadCount?.[userId] || 0,
+						roles: data.roles || {},
+						background: data.background || null,
+					});
+				}
+
+				callback(conversationsList);
+			});
+		},
 		// Get a single conversation by ID (e.g. when opening chat for a new match)
 		getConversation: async (
 			conversationId: string,
 			userId: string
-		): Promise<{ name: string; participants: string[]; isGroup: boolean; partnerKind?: "solo" | "couple" } | null> => {
+		): Promise<{ name: string; participants: string[]; isGroup: boolean; partnerKind?: "solo" | "couple"; roles?: Record<string, string>; background?: string | null } | null> => {
 			try {
 				const conversationRef = doc(db, "conversations", conversationId);
 				const conversationDoc = await getDoc(conversationRef);
@@ -1156,17 +1223,28 @@ export const firebaseApi = {
 						partnerKind = profile?.kind ?? "solo";
 					}
 				}
-				return { name, participants, isGroup, partnerKind };
+				return { name, participants, isGroup, partnerKind, roles: data.roles || {}, background: data.background || null };
 			} catch (error) {
 				console.error("Error fetching conversation:", error);
 				return null;
+			}
+		},
+		// Clear unread count for a user in a conversation
+		clearUnreadCount: async (conversationId: string, userId: string): Promise<void> => {
+			try {
+				const conversationRef = doc(db, "conversations", conversationId);
+				await updateDoc(conversationRef, {
+					[`unreadCount.${userId}`]: 0,
+				});
+			} catch (error) {
+				console.error("Error clearing unread count:", error);
 			}
 		},
 		// Send a message
 		sendMessage: async (
 			conversationId: string,
 			text: string,
-			extra?: { image?: string; audio?: string }
+			extra?: { image?: string; video?: string; audio?: string }
 		): Promise<string> => {
 			try {
 				if (!auth.currentUser) {
@@ -1182,18 +1260,33 @@ export const firebaseApi = {
 					createdAt: Date.now(),
 				};
 				if (extra?.image) messageData.image = extra.image;
+				if (extra?.video) messageData.video = extra.video;
 				if (extra?.audio) messageData.audio = extra.audio;
 
 				await setDoc(messageRef, messageData);
 
-				// Update conversation's last message and timestamp
+				// Update conversation's last message, timestamp and increment unread counts
 				const conversationRef = doc(db, "conversations", conversationId);
-				const preview = extra?.image ? "📷 Photo" : extra?.audio ? "🎤 Voice message" : text;
-				await updateDoc(conversationRef, {
+				const convSnap = await getDoc(conversationRef);
+				let participants: string[] = [];
+				if (convSnap.exists()) {
+					participants = convSnap.data().participants || [];
+				}
+
+				const preview = extra?.image ? "📷 Photo" : extra?.video ? "🎥 Video" : extra?.audio ? "🎤 Voice message" : text;
+				const updateObj: Record<string, any> = {
 					lastMessage: preview,
 					lastMessageAt: Date.now(),
 					updatedAt: Date.now(),
+				};
+
+				participants.forEach((pId) => {
+					if (pId !== userId) {
+						updateObj[`unreadCount.${pId}`] = increment(1);
+					}
 				});
+
+				await updateDoc(conversationRef, updateObj);
 
 				return messageRef.id;
 			} catch (error) {
@@ -1206,6 +1299,7 @@ export const firebaseApi = {
 			id: string;
 			text: string;
 			image?: string;
+			video?: string;
 			audio?: string;
 			timestamp: string;
 			isSent: boolean;
@@ -1228,6 +1322,7 @@ export const firebaseApi = {
 					id: string;
 					text: string;
 					image?: string;
+					video?: string;
 					audio?: string;
 					timestamp: string;
 					isSent: boolean;
@@ -1242,6 +1337,7 @@ export const firebaseApi = {
 						id: doc.id,
 						text: data.text ?? "",
 						image: data.image ?? undefined,
+						video: data.video ?? undefined,
 						audio: data.audio ?? undefined,
 						timestamp: new Date(createdAt).toLocaleTimeString("en-US", {
 							hour: "2-digit",
@@ -1267,6 +1363,7 @@ export const firebaseApi = {
 				id: string;
 				text: string;
 				image?: string;
+				video?: string;
 				audio?: string;
 				timestamp: string;
 				isSent: boolean;
@@ -1289,6 +1386,7 @@ export const firebaseApi = {
 					id: string;
 					text: string;
 					image?: string;
+					video?: string;
 					audio?: string;
 					timestamp: string;
 					isSent: boolean;
@@ -1303,6 +1401,7 @@ export const firebaseApi = {
 						id: doc.id,
 						text: data.text ?? "",
 						image: data.image ?? undefined,
+						video: data.video ?? undefined,
 						audio: data.audio ?? undefined,
 						timestamp: new Date(createdAt).toLocaleTimeString("en-US", {
 							hour: "2-digit",
@@ -1317,6 +1416,111 @@ export const firebaseApi = {
 
 				callback(messages);
 			});
+		},
+		// Update participant's role in a conversation
+		updateParticipantRole: async (conversationId: string, participantId: string, role: "admin" | "member"): Promise<void> => {
+			try {
+				const conversationRef = doc(db, "conversations", conversationId);
+				await updateDoc(conversationRef, {
+					[`roles.${participantId}`]: role,
+					updatedAt: Date.now(),
+				});
+			} catch (error) {
+				console.error("Error updating participant role:", error);
+				throw error;
+			}
+		},
+		// Remove participant from group/conversation
+		removeParticipant: async (conversationId: string, participantId: string): Promise<void> => {
+			try {
+				const conversationRef = doc(db, "conversations", conversationId);
+				const convSnap = await getDoc(conversationRef);
+				if (!convSnap.exists()) return;
+				const convData = convSnap.data();
+				const participants = (convData.participants || []).filter((id: string) => id !== participantId);
+
+				await updateDoc(conversationRef, {
+					participants,
+					[`roles.${participantId}`]: deleteField(),
+					[`unreadCount.${participantId}`]: deleteField(),
+					updatedAt: Date.now(),
+				});
+
+				// Also update the group document
+				const groupId = convData.groupId;
+				if (groupId) {
+					const groupRef = doc(db, "groups", groupId);
+					const groupSnap = await getDoc(groupRef);
+					if (groupSnap.exists()) {
+						const groupData = groupSnap.data();
+						const groupParticipants = (groupData.participants || []).filter((id: string) => id !== participantId);
+						await updateDoc(groupRef, {
+							participants: groupParticipants,
+							updatedAt: Date.now(),
+						});
+					}
+				}
+			} catch (error) {
+				console.error("Error removing participant:", error);
+				throw error;
+			}
+		},
+		// Leave group
+		leaveGroup: async (conversationId: string, userId: string): Promise<void> => {
+			try {
+				const conversationRef = doc(db, "conversations", conversationId);
+				const convSnap = await getDoc(conversationRef);
+				if (!convSnap.exists()) return;
+				const convData = convSnap.data();
+
+				const isCreator = convData.roles?.[userId] === "creator" || (convData.groupId && (await getDoc(doc(db, "groups", convData.groupId))).data()?.userId === userId);
+
+				if (isCreator) {
+					const groupId = convData.groupId;
+					if (groupId) {
+						await deleteDoc(doc(db, "groups", groupId));
+					}
+					await deleteDoc(conversationRef);
+				} else {
+					const participants = (convData.participants || []).filter((id: string) => id !== userId);
+					await updateDoc(conversationRef, {
+						participants,
+						[`roles.${userId}`]: deleteField(),
+						[`unreadCount.${userId}`]: deleteField(),
+						updatedAt: Date.now(),
+					});
+
+					const groupId = convData.groupId;
+					if (groupId) {
+						const groupRef = doc(db, "groups", groupId);
+						const groupSnap = await getDoc(groupRef);
+						if (groupSnap.exists()) {
+							const groupData = groupSnap.data();
+							const groupParticipants = (groupData.participants || []).filter((id: string) => id !== userId);
+							await updateDoc(groupRef, {
+								participants: groupParticipants,
+								updatedAt: Date.now(),
+							});
+						}
+					}
+				}
+			} catch (error) {
+				console.error("Error leaving group:", error);
+				throw error;
+			}
+		},
+		// Update chat background style/theme
+		updateChatBackground: async (conversationId: string, background: string): Promise<void> => {
+			try {
+				const conversationRef = doc(db, "conversations", conversationId);
+				await updateDoc(conversationRef, {
+					background,
+					updatedAt: Date.now(),
+				});
+			} catch (error) {
+				console.error("Error updating chat background:", error);
+				throw error;
+			}
 		},
 	},
 	pushTokens: {

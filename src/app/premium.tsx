@@ -41,7 +41,7 @@ export default function PremiumScreen() {
         {isPremium ? (
           <View style={styles.premiumActiveCard}>
             <Feather name="check-circle" size={32} color={buddiColors.primary} />
-            <Text style={styles.premiumActiveTitle}>You're Premium!</Text>
+            <Text style={styles.premiumActiveTitle}>{"You're Premium!"}</Text>
             <Text style={styles.premiumActiveSubtitle}>Thanks for supporting Buddia.</Text>
           </View>
         ) : (

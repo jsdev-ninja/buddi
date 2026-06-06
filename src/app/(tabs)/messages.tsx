@@ -5,7 +5,6 @@ import { SettingsDropdown } from '@/components/SettingsDropdown';
 import { buddiColors } from '@/constants/theme';
 import { useAuth } from '@/context/AuthProvider';
 import type { GroupInput } from '@/entities/group';
-import { getDisplayName } from '@/lib/profile';
 import { firebaseApi } from '@/services/firebase';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -23,6 +22,7 @@ type ConversationItem = {
   isMatchOnly?: boolean;
   otherUserId?: string;
   partnerKind?: "solo" | "couple";
+  unreadCount?: number;
 };
 
 function getConversationId(userId1: string, userId2: string): string {
@@ -34,7 +34,7 @@ export default function MessagesScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
-  const [matches, setMatches] = useState<Array<{ matchId: string; userId: string; createdAt: number }>>([]);
+  const [matches, setMatches] = useState<{ matchId: string; userId: string; createdAt: number }[]>([]);
   const [matchNames, setMatchNames] = useState<Record<string, string>>({});
   const [matchKinds, setMatchKinds] = useState<Record<string, "solo" | "couple">>({});
   const [isLoading, setIsLoading] = useState(true);
@@ -43,19 +43,22 @@ export default function MessagesScreen() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   useEffect(() => {
-    const fetchData = async () => {
-      if (!user?.uid) {
-        setIsLoading(false);
-        return;
-      }
+    if (!user?.uid) {
+      setIsLoading(false);
+      return;
+    }
 
+    setIsLoading(true);
+
+    // Subscribe to conversations in real-time
+    const unsubscribeConversations = firebaseApi.chat.subscribeToConversations(user.uid, (convs) => {
+      setConversations(convs);
+      setIsLoading(false);
+    });
+
+    const fetchMatches = async () => {
       try {
-        setIsLoading(true);
-        const [convs, userMatches] = await Promise.all([
-          firebaseApi.chat.getConversations(user.uid),
-          firebaseApi.matches.getUserMatches(user.uid),
-        ]);
-        setConversations(convs);
+        const userMatches = await firebaseApi.matches.getUserMatches(user.uid);
         setMatches(userMatches);
 
         const names: Record<string, string> = {};
@@ -63,20 +66,22 @@ export default function MessagesScreen() {
         await Promise.all(
           userMatches.map(async (m) => {
             const profile = await firebaseApi.profiles.getProfile(m.userId);
-            names[m.userId] = getDisplayName(profile);
+            names[m.userId] = profile?.name || 'Unknown';
             kinds[m.userId] = profile?.kind ?? "solo";
           })
         );
         setMatchNames(names);
         setMatchKinds(kinds);
       } catch (error) {
-        console.error('Error fetching messages data:', error);
-      } finally {
-        setIsLoading(false);
+        console.error('Error fetching matches:', error);
       }
     };
 
-    fetchData();
+    fetchMatches();
+
+    return () => {
+      unsubscribeConversations();
+    };
   }, [user?.uid, refreshTrigger]);
 
   const conversationIds = useMemo(
@@ -202,11 +207,29 @@ export default function MessagesScreen() {
                       </Text>
                     ) : null}
                   </View>
-                  {item.isMatchOnly ? (
-                    <Feather name="message-circle" size={20} color={buddiColors.primary} />
-                  ) : item.timestamp ? (
-                    <Text style={styles.conversationTime}>{item.timestamp}</Text>
-                  ) : null}
+                   <View style={styles.conversationRight}>
+                    {item.isMatchOnly ? (
+                      <Feather name="message-circle" size={20} color={buddiColors.primary} />
+                    ) : (
+                      <>
+                        {item.timestamp && (
+                          <Text style={[
+                            styles.conversationTime,
+                            (item.unreadCount ?? 0) > 0 && styles.conversationTimeUnread
+                          ]}>
+                            {item.timestamp}
+                          </Text>
+                        )}
+                        {(item.unreadCount ?? 0) > 0 && (
+                          <View style={styles.unreadBadge}>
+                            <Text style={styles.unreadBadgeText}>
+                              {item.unreadCount}
+                            </Text>
+                          </View>
+                        )}
+                      </>
+                    )}
+                  </View>
                 </Pressable>
               );
             })}
@@ -434,5 +457,29 @@ const styles = StyleSheet.create({
   conversationTime: {
     fontSize: 12,
     color: buddiColors.textTertiary,
+  },
+  conversationRight: {
+    alignItems: 'flex-end',
+    gap: 6,
+    justifyContent: 'center',
+    minWidth: 50,
+  },
+  conversationTimeUnread: {
+    color: buddiColors.primary,
+    fontWeight: '600',
+  },
+  unreadBadge: {
+    backgroundColor: buddiColors.primary,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  unreadBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: 'bold',
   },
 });

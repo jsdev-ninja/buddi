@@ -2,12 +2,14 @@ import { CouplePill } from '@/components/CouplePill';
 import { buddiColors } from '@/constants/theme';
 import { useAuth } from '@/context/AuthProvider';
 import { setCurrentChatConversationId } from '@/context/NotificationProvider';
-import { firebaseApi } from '@/services/firebase';
+import { db, firebaseApi } from '@/services/firebase';
 import { Feather } from '@expo/vector-icons';
-import { Audio } from 'expo-av';
+import { Audio, Video } from 'expo-av';
+import { doc, onSnapshot } from 'firebase/firestore';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
 import {
   ActivityIndicator,
   Alert,
@@ -15,6 +17,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -26,6 +29,7 @@ type FirebaseMessage = {
   id: string;
   text: string;
   image?: string;
+  video?: string;
   audio?: string;
   timestamp: string;
   isSent: boolean;
@@ -38,6 +42,7 @@ function toGiftedMessage(m: FirebaseMessage, currentUserId: string): IMessage {
     _id: m.id,
     text: m.text,
     image: m.image,
+    video: m.video,
     audio: m.audio,
     createdAt: new Date(m.createdAt),
     user: {
@@ -106,6 +111,15 @@ function AudioMessage({ uri, isMine }: { uri: string; isMine?: boolean }) {
   );
 }
 
+const BACKGROUNDS = [
+  { id: 'default', name: 'Default', value: buddiColors.background },
+  { id: 'zinc', name: 'Zinc Charcoal', value: '#18181B' },
+  { id: 'sunset', name: 'Sunset', value: 'sunset', isGradient: true, colors: ['#FF7E5F', '#FEB47B'] },
+  { id: 'sky', name: 'Sky', value: 'sky', isGradient: true, colors: ['#00c6ff', '#0072ff'] },
+  { id: 'lavender', name: 'Lavender', value: 'lavender', isGradient: true, colors: ['#a18cd1', '#fbc2eb'] },
+  { id: 'forest', name: 'Forest', value: 'forest', isGradient: true, colors: ['#11998e', '#38ef7d'] },
+];
+
 export default function ChatScreen() {
   const router = useRouter();
   const { user } = useAuth();
@@ -125,6 +139,15 @@ export default function ChatScreen() {
   const recordingRef = useRef<Audio.Recording | null>(null);
   const insets = useSafeAreaInsets();
 
+  const [conversationBackground, setConversationBackground] = useState('default');
+  const [conversationRoles, setConversationRoles] = useState<Record<string, string>>({});
+  const [groupMembersList, setGroupMembersList] = useState<{ id: string; name: string; role: string }[]>([]);
+  const [showGroupOptions, setShowGroupOptions] = useState(false);
+
+  const selectedBackground = useMemo(() => {
+    return BACKGROUNDS.find((b) => b.id === conversationBackground) || BACKGROUNDS[0];
+  }, [conversationBackground]);
+
   const giftedUser: User = useMemo(
     () => (user?.uid ? { _id: user.uid } : { _id: '' }),
     [user?.uid]
@@ -137,6 +160,13 @@ export default function ChatScreen() {
     if (id) setCurrentChatConversationId(id);
     return () => setCurrentChatConversationId(null);
   }, [id]);
+
+  // Reset unread count on mount/focus
+  useEffect(() => {
+    if (id && user?.uid) {
+      firebaseApi.chat.clearUnreadCount(id, user.uid);
+    }
+  }, [id, user?.uid]);
 
   // Fetch conversation meta and subscribe to messages
   useEffect(() => {
@@ -155,6 +185,8 @@ export default function ChatScreen() {
           setMembers(conversation.members || 1);
           setIsGroupChat(conversation.isGroup ?? false);
           setPartnerKind(conversation.partnerKind);
+          setConversationBackground(conversation.background || 'default');
+          setConversationRoles(conversation.roles || {});
           if (!conversation.isGroup && conversation.participantIds?.length >= 2) {
             const other = conversation.participantIds.find((p: string) => p !== user.uid);
             setOtherUserId(other ?? null);
@@ -164,6 +196,8 @@ export default function ChatScreen() {
           setMembers(convDoc.participants.length);
           setIsGroupChat(convDoc.isGroup);
           setPartnerKind(convDoc.partnerKind);
+          setConversationBackground(convDoc.background || 'default');
+          setConversationRoles(convDoc.roles || {});
           if (!convDoc.isGroup && convDoc.participants.length >= 2) {
             const other = convDoc.participants.find((p: string) => p !== user.uid);
             setOtherUserId(other ?? null);
@@ -183,15 +217,52 @@ export default function ChatScreen() {
 
     const unsubscribe = firebaseApi.chat.subscribeToMessages(id, (updated) => {
       setFirebaseMessages(updated);
+      // If we are actively in this chat, clear unread count for any new incoming messages
+      firebaseApi.chat.clearUnreadCount(id, user.uid);
     });
 
     return () => unsubscribe();
   }, [id, user?.uid]);
 
+  // Subscribe to conversation document for real-time background, members, and roles updates
+  useEffect(() => {
+    if (!id || !user?.uid) return;
+
+    const convRef = doc(db, "conversations", id);
+    const unsubscribeConv = onSnapshot(convRef, async (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data.groupName) setChatName(data.groupName);
+        setMembers(data.participants?.length || 1);
+        setIsGroupChat(data.isGroup ?? false);
+        setConversationBackground(data.background || 'default');
+        setConversationRoles(data.roles || {});
+
+        // Fetch user profiles for group members management modal
+        try {
+          const profilesList: any[] = [];
+          for (const pId of data.participants || []) {
+            const profile = await firebaseApi.profiles.getProfile(pId);
+            profilesList.push({
+              id: pId,
+              name: profile?.name || 'Unknown',
+              role: data.roles?.[pId] || 'member',
+            });
+          }
+          setGroupMembersList(profilesList);
+        } catch (e) {
+          console.error("Error fetching group member profiles:", e);
+        }
+      }
+    });
+
+    return () => unsubscribeConv();
+  }, [id, user?.uid]);
+
   // GiftedChat with inverted list expects newest first; list renders reversed so newest is at bottom
   const giftedMessages: IMessage[] = useMemo(() => {
     const mapped = firebaseMessages
-      .filter((m) => m.text?.trim() !== '')
+      .filter((m) => m.text?.trim() !== '' || m.image || m.video || m.audio)
       .map((m) => toGiftedMessage(m, user?.uid ?? ''));
     return mapped.sort((a, b) => (b.createdAt as Date).getTime() - (a.createdAt as Date).getTime());
   }, [firebaseMessages, user?.uid]);
@@ -219,17 +290,20 @@ export default function ChatScreen() {
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
       quality: 0.7,
     });
     if (result.canceled) return;
     try {
       setIsSendingMedia(true);
-      const url = await firebaseApi.storage.uploadChatMedia(result.assets[0].uri, id, 'image');
-      await firebaseApi.chat.sendMessage(id, '', { image: url });
+      const asset = result.assets[0];
+      const isVideo = asset.type === 'video';
+      const type = isVideo ? 'video' : 'image';
+      const url = await firebaseApi.storage.uploadChatMedia(asset.uri, id, type);
+      await firebaseApi.chat.sendMessage(id, '', { [type]: url });
     } catch (e) {
-      console.error('Error sending image:', e);
-      Alert.alert('Error', 'Could not send image.');
+      console.error('Error sending media:', e);
+      Alert.alert('Error', 'Could not send media.');
     } finally {
       setIsSendingMedia(false);
     }
@@ -347,7 +421,16 @@ export default function ChatScreen() {
               </Pressable>
             )}
             {isGroupChat && (
-              <Text style={styles.moreMenuPlaceholder}>Group options coming soon</Text>
+              <Pressable
+                style={styles.moreMenuItem}
+                onPress={() => {
+                  setShowMoreMenu(false);
+                  setShowGroupOptions(true);
+                }}
+              >
+                <Feather name="info" size={20} color={buddiColors.textPrimary} />
+                <Text style={styles.moreMenuItemText}>Group Settings</Text>
+              </Pressable>
             )}
             {!isGroupChat && !otherUserId && (
               <Text style={styles.moreMenuPlaceholder}>No actions</Text>
@@ -368,6 +451,19 @@ export default function ChatScreen() {
 
       {/* Gifted Chat - handles keyboard, list, and input with best practices */}
       <View style={styles.chatWrapper}>
+        {selectedBackground.isGradient ? (
+          <LinearGradient
+            colors={selectedBackground.colors || []}
+            style={StyleSheet.absoluteFillObject}
+          />
+        ) : (
+          <View
+            style={[
+              StyleSheet.absoluteFillObject,
+              { backgroundColor: selectedBackground.value }
+            ]}
+          />
+        )}
         <GiftedChat
           messages={giftedMessages}
           onSend={onSend}
@@ -375,10 +471,10 @@ export default function ChatScreen() {
           renderLoading={isLoading ? renderLoading : undefined}
           isInverted
           listProps={{
-            style: styles.messageList,
+            style: [styles.messageList, selectedBackground.id !== 'default' && { backgroundColor: 'transparent' }],
             contentContainerStyle: styles.messageListContent,
           }}
-          messagesContainerStyle={styles.messagesContainer}
+          messagesContainerStyle={[styles.messagesContainer, selectedBackground.id !== 'default' && { backgroundColor: 'transparent' }]}
           timeFormat="HH:mm"
           dateFormat="D MMM"
           minInputToolbarHeight={48}
@@ -450,6 +546,19 @@ export default function ChatScreen() {
               </Pressable>
             );
           }}
+          renderMessageVideo={(props) => {
+            const videoUrl = props.currentMessage?.video;
+            if (!videoUrl) return null;
+            return (
+              <Video
+                source={{ uri: videoUrl }}
+                style={styles.messageVideo}
+                useNativeControls
+                resizeMode="contain"
+                isLooping={false}
+              />
+            );
+          }}
           renderCustomView={(props) => {
             const audioUrl = (props.currentMessage as any)?.audio;
             if (!audioUrl) return null;
@@ -487,6 +596,167 @@ export default function ChatScreen() {
           }}
         />
       </View>
+
+      {/* Group options / settings modal */}
+      <Modal
+        visible={showGroupOptions}
+        animationType="slide"
+        onRequestClose={() => setShowGroupOptions(false)}
+      >
+        <View style={[styles.optionsContainer, { paddingTop: insets.top }]}>
+          {/* Header */}
+          <View style={styles.optionsHeader}>
+            <Pressable onPress={() => setShowGroupOptions(false)} style={styles.optionsBackButton}>
+              <Feather name="x" size={24} color={buddiColors.textPrimary} />
+            </Pressable>
+            <Text style={styles.optionsTitle}>Group Settings</Text>
+            <View style={{ width: 40 }} />
+          </View>
+
+          <ScrollView style={styles.optionsScroll} contentContainerStyle={styles.optionsScrollContent} showsVerticalScrollIndicator={false}>
+            {/* Group details summary */}
+            <View style={styles.optionsGroupCard}>
+              <View style={styles.optionsAvatarGroup}>
+                <Feather name="users" size={32} color={buddiColors.primary} />
+              </View>
+              <Text style={styles.optionsGroupName}>{chatName}</Text>
+              <Text style={styles.optionsGroupMeta}>{members} members</Text>
+            </View>
+
+            {/* Background Selector */}
+            <View style={styles.optionsSection}>
+              <Text style={styles.optionsSectionTitle}>Chat Background</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.bgList}>
+                {BACKGROUNDS.map((bg) => {
+                  const isSelected = bg.id === conversationBackground;
+                  return (
+                    <Pressable
+                      key={bg.id}
+                      style={[styles.bgItem, isSelected && styles.bgItemAct]}
+                      onPress={() => firebaseApi.chat.updateChatBackground(id, bg.id)}
+                    >
+                      <View style={[styles.bgOuter, isSelected && styles.bgOuterSelected]}>
+                        {bg.isGradient ? (
+                          <LinearGradient colors={bg.colors || []} style={styles.bgPreview} />
+                        ) : (
+                          <View style={[styles.bgPreview, { backgroundColor: bg.value }]} />
+                        )}
+                      </View>
+                      <Text style={styles.bgLabel} numberOfLines={1}>{bg.name}</Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            {/* Members Management */}
+            <View style={styles.optionsSection}>
+              <Text style={styles.optionsSectionTitle}>Group Members</Text>
+              <View style={styles.memberList}>
+                {groupMembersList.map((m) => {
+                  const currentUserRole = conversationRoles[user?.uid ?? ''];
+                  const isCurrentUserCreator = currentUserRole === 'creator';
+                  const isCurrentUserAdmin = currentUserRole === 'admin';
+                  const isTargetCreator = m.role === 'creator';
+                  const isTargetAdmin = m.role === 'admin';
+                  
+                  // Can current user kick target?
+                  // Creator can kick anyone. Admin can kick member.
+                  const canKick = (isCurrentUserCreator && !isTargetCreator) || (isCurrentUserAdmin && !isTargetCreator && !isTargetAdmin);
+                  // Can current user promote/demote? Only creator can promote/demote admins.
+                  const canManageRole = isCurrentUserCreator && !isTargetCreator;
+
+                  return (
+                    <View key={m.id} style={styles.memberRow}>
+                      <View style={styles.memberInfo}>
+                        <Text style={styles.memberName}>{m.name} {m.id === user?.uid && '(You)'}</Text>
+                        <View style={[
+                          styles.roleBadge,
+                          m.role === 'creator' && styles.roleBadgeCreator,
+                          m.role === 'admin' && styles.roleBadgeAdmin
+                        ]}>
+                          <Text style={styles.roleBadgeText}>{m.role.toUpperCase()}</Text>
+                        </View>
+                      </View>
+                      
+                      <View style={styles.memberActions}>
+                        {canManageRole && (
+                          <Pressable
+                            style={styles.actionBtnSecondary}
+                            onPress={async () => {
+                              const newRole = m.role === 'admin' ? 'member' : 'admin';
+                              await firebaseApi.chat.updateParticipantRole(id, m.id, newRole);
+                            }}
+                          >
+                            <Text style={styles.actionBtnTextSecondary}>
+                              {m.role === 'admin' ? 'Demote' : 'Make Admin'}
+                            </Text>
+                          </Pressable>
+                        )}
+                        {canKick && m.id !== user?.uid && (
+                          <Pressable
+                            style={styles.actionBtnDanger}
+                            onPress={() => {
+                              Alert.alert(
+                                'Remove Member',
+                                `Are you sure you want to remove ${m.name} from this group?`,
+                                [
+                                  { text: 'Cancel', style: 'cancel' },
+                                  {
+                                    text: 'Remove',
+                                    style: 'destructive',
+                                    onPress: async () => {
+                                      await firebaseApi.chat.removeParticipant(id, m.id);
+                                    }
+                                  }
+                                ]
+                              );
+                            }}
+                          >
+                            <Feather name="user-x" size={16} color={buddiColors.dangerText} />
+                          </Pressable>
+                        )}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Leave Group */}
+            <Pressable
+              style={styles.leaveButton}
+              onPress={() => {
+                const currentUserRole = conversationRoles[user?.uid ?? ''];
+                const isCreator = currentUserRole === 'creator';
+                const msg = isCreator
+                  ? 'Leaving as creator will delete this group and chat conversation. Are you sure?'
+                  : 'Are you sure you want to leave this group?';
+                
+                Alert.alert(
+                  'Leave Group',
+                  msg,
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Leave',
+                      style: 'destructive',
+                      onPress: async () => {
+                        await firebaseApi.chat.leaveGroup(id, user!.uid);
+                        setShowGroupOptions(false);
+                        router.replace('/(tabs)/messages');
+                      }
+                    }
+                  ]
+                );
+              }}
+            >
+              <Feather name="log-out" size={20} color={buddiColors.textOnDark} />
+              <Text style={styles.leaveButtonText}>Leave Group</Text>
+            </Pressable>
+          </ScrollView>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -720,5 +990,192 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: buddiColors.textSecondary,
     padding: 16,
+  },
+  optionsContainer: {
+    flex: 1,
+    backgroundColor: buddiColors.background,
+  },
+  optionsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: buddiColors.surfaceBorder,
+    backgroundColor: buddiColors.surface,
+  },
+  optionsBackButton: {
+    padding: 8,
+  },
+  optionsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: buddiColors.textPrimary,
+  },
+  optionsScroll: {
+    flex: 1,
+  },
+  optionsScrollContent: {
+    padding: 20,
+    gap: 24,
+  },
+  optionsGroupCard: {
+    backgroundColor: buddiColors.surface,
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: buddiColors.surfaceBorder,
+  },
+  optionsAvatarGroup: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: buddiColors.primaryMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  optionsGroupName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: buddiColors.textPrimary,
+  },
+  optionsGroupMeta: {
+    fontSize: 14,
+    color: buddiColors.textSecondary,
+  },
+  optionsSection: {
+    gap: 12,
+  },
+  optionsSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: buddiColors.textPrimary,
+  },
+  bgList: {
+    gap: 12,
+    paddingVertical: 4,
+  },
+  bgItem: {
+    width: 80,
+    alignItems: 'center',
+    gap: 6,
+  },
+  bgItemAct: {
+    transform: [{ scale: 1.05 }],
+  },
+  bgOuter: {
+    width: 66,
+    height: 66,
+    borderRadius: 33,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  bgOuterSelected: {
+    borderColor: buddiColors.primary,
+  },
+  bgPreview: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  bgLabel: {
+    fontSize: 11,
+    color: buddiColors.textSecondary,
+    textAlign: 'center',
+    width: '100%',
+  },
+  memberList: {
+    backgroundColor: buddiColors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: buddiColors.surfaceBorder,
+    overflow: 'hidden',
+  },
+  memberRow: {
+    flexDirection: 'row',
+    direction: 'ltr',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: buddiColors.surfaceBorder,
+  },
+  memberInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  memberName: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: buddiColors.textPrimary,
+  },
+  roleBadge: {
+    backgroundColor: buddiColors.surfaceMuted,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  roleBadgeCreator: {
+    backgroundColor: buddiColors.primaryMuted,
+  },
+  roleBadgeAdmin: {
+    backgroundColor: '#EEF2FF', // indigo-50
+  },
+  roleBadgeText: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: buddiColors.textSecondary,
+  },
+  memberActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  actionBtnSecondary: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: buddiColors.surfaceMuted,
+  },
+  actionBtnTextSecondary: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: buddiColors.textPrimary,
+  },
+  actionBtnDanger: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: buddiColors.dangerBackground,
+  },
+  leaveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: buddiColors.dangerText,
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginTop: 12,
+  },
+  leaveButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: buddiColors.textOnDark,
+  },
+  messageVideo: {
+    width: 200,
+    height: 150,
+    borderRadius: 12,
+    margin: 4,
   },
 });
