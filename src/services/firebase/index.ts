@@ -23,6 +23,7 @@ import {
 	getDoc,
 	getDocs,
 	getFirestore,
+	increment,
 	onSnapshot,
 	orderBy,
 	query,
@@ -53,14 +54,14 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 
 // Initialize Firestore
-const db = getFirestore(app);
+export const db = getFirestore(app);
 
 // Initialize Firebase Storage
-const firebaseStorage = getStorage(app);
+export const firebaseStorage = getStorage(app);
 
 // Initialize Auth with React Native persistence
 // Check if auth is already initialized to avoid "already-initialized" error
-let auth;
+export let auth: any;
 try {
 	auth = initializeAuth(app, {
 		persistence: getReactNativePersistence(AsyncStorage),
@@ -446,11 +447,16 @@ export const firebaseApi = {
 				const initialParticipantIds = Array.isArray(firestoreData.participants) ? firestoreData.participants : [];
 				const conversationParticipants = [...new Set([creatorId, ...initialParticipantIds])];
 				const conversationId = `group_${docRef.id}`;
+				const unreadCount: Record<string, number> = {};
+				conversationParticipants.forEach((pId) => {
+					unreadCount[pId] = 0;
+				});
 				await setDoc(doc(db, "conversations", conversationId), {
 					participants: conversationParticipants,
 					isGroup: true,
 					groupId: docRef.id,
 					groupName: firestoreData.groupName || "Unnamed Group",
+					unreadCount,
 					createdAt: now,
 					updatedAt: now,
 					lastMessage: null,
