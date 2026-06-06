@@ -71,6 +71,9 @@ export default function DiscoverScreen() {
             interests: profile.interests || [],
             adventurePlan: profile.adventurePlan || undefined,
             gender: profile.gender,
+            photos: profile.photos || [],
+            prompts: profile.prompts || [],
+            completedAdventures: profile.completedAdventures || [],
           };
         });
 
@@ -260,7 +263,13 @@ export default function DiscoverScreen() {
           >
             <Card style={styles.mainCard}>
               {current.type === 'traveler' ? (
-                <>
+                <ScrollView
+                  style={styles.travelerScrollView}
+                  contentContainerStyle={styles.travelerScrollContent}
+                  showsVerticalScrollIndicator={false}
+                  nestedScrollEnabled
+                  bounces={false}
+                >
                   {/* Profile photo - tap to view full profile */}
                   <Pressable
                     style={styles.travelerPhotoSection}
@@ -293,7 +302,7 @@ export default function DiscoverScreen() {
                     </LinearGradient>
                   </Pressable>
 
-                  {/* White section: Pass and Like buttons only */}
+                  {/* Pass / Like action buttons */}
                   <View style={styles.travelerActionsSection}>
                     <Pressable
                       style={styles.passButton}
@@ -310,7 +319,100 @@ export default function DiscoverScreen() {
                       <Feather name="heart" size={28} color={buddiColors.textOnDark} />
                     </Pressable>
                   </View>
-                </>
+
+                  {/* ── Scrollable extra sections ── */}
+                  <View style={styles.cardDetailSections}>
+                    {/* Photos grid (skip index 0 — already shown as main photo) */}
+                    {current.data.photos && current.data.photos.length > 1 && (
+                      <View style={styles.detailSection}>
+                        <Text style={styles.detailSectionTitle}>Photos</Text>
+                        <View style={styles.photoGrid}>
+                          {current.data.photos.slice(1).map((uri, i) => (
+                            <Image
+                              key={i}
+                              source={{ uri }}
+                              style={styles.photoGridItem}
+                              resizeMode="cover"
+                            />
+                          ))}
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Bio */}
+                    {!!current.data.bio && (
+                      <View style={styles.detailSection}>
+                        <Text style={styles.detailSectionTitle}>About me</Text>
+                        <Text style={styles.detailBioText}>{current.data.bio}</Text>
+                      </View>
+                    )}
+
+                    {/* Prompts */}
+                    {current.data.prompts && current.data.prompts.some((p) => p.answer?.trim()) && (
+                      <View style={styles.detailSection}>
+                        <Text style={styles.detailSectionTitle}>My Answers</Text>
+                        <View style={styles.promptsList}>
+                          {current.data.prompts
+                            .filter((p) => p.answer?.trim())
+                            .map((p, i) => (
+                              <View key={i} style={styles.promptCard}>
+                                <Text style={styles.promptQuestion}>{p.question}</Text>
+                                <Text style={styles.promptAnswer}>{p.answer}</Text>
+                              </View>
+                            ))}
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Interests */}
+                    {current.data.interests && current.data.interests.length > 0 && (
+                      <View style={styles.detailSection}>
+                        <Text style={styles.detailSectionTitle}>
+                          Interests ({current.data.interests.length})
+                        </Text>
+                        <View style={styles.interestsRow}>
+                          {current.data.interests.map((interest, i) => (
+                            <View key={i} style={styles.interestPill}>
+                              <Text style={styles.interestPillText}>{interest}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Completed Adventures */}
+                    {current.data.completedAdventures && current.data.completedAdventures.length > 0 && (
+                      <View style={styles.detailSection}>
+                        <Text style={styles.detailSectionTitle}>Completed Adventures</Text>
+                        <View style={styles.adventuresList}>
+                          {current.data.completedAdventures.map((adv, i) => (
+                            <View key={i} style={styles.adventureItem}>
+                              {adv.photo ? (
+                                <Image
+                                  source={{ uri: adv.photo }}
+                                  style={styles.adventurePhoto}
+                                  resizeMode="cover"
+                                />
+                              ) : (
+                                <View style={styles.adventurePhotoPlaceholder}>
+                                  <Feather name="map" size={16} color={buddiColors.textTertiary} />
+                                </View>
+                              )}
+                              <View style={styles.adventureInfo}>
+                                <Text style={styles.adventureTitle}>{adv.title}</Text>
+                                {(adv.startDate || adv.endDate) && (
+                                  <Text style={styles.adventureDates}>
+                                    {adv.startDate}{adv.startDate && adv.endDate ? ' • ' : ''}{adv.endDate}
+                                  </Text>
+                                )}
+                              </View>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                </ScrollView>
               ) : (
                 <>
                   {/* Group Card - Upper Section (60%) */}
@@ -463,8 +565,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     padding: 0,
   },
-  travelerPhotoSection: {
+  travelerScrollView: {
     flex: 1,
+  },
+  travelerScrollContent: {
+    flexGrow: 1,
+  },
+  travelerPhotoSection: {
+    height: 360,
     width: '100%',
     position: 'relative',
     backgroundColor: buddiColors.surfaceMuted,
@@ -707,6 +815,110 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: buddiColors.textOnDark,
+  },
+  // Traveler card detail sections (revealed by scrolling)
+  cardDetailSections: {
+    backgroundColor: buddiColors.surface,
+    paddingBottom: 24,
+  },
+  detailSection: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    gap: 12,
+  },
+  detailSectionTitle: {
+    fontSize: 17,
+    fontWeight: 'bold',
+    color: buddiColors.textPrimary,
+  },
+  detailBioText: {
+    fontSize: 15,
+    color: buddiColors.textPrimary,
+    lineHeight: 22,
+  },
+  photoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  photoGridItem: {
+    width: '47%',
+    aspectRatio: 1,
+    borderRadius: 12,
+    backgroundColor: buddiColors.surfaceMuted,
+  },
+  promptsList: {
+    gap: 10,
+  },
+  promptCard: {
+    backgroundColor: buddiColors.surfaceMuted,
+    borderRadius: 12,
+    padding: 14,
+    gap: 4,
+  },
+  promptQuestion: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: buddiColors.textSecondary,
+  },
+  promptAnswer: {
+    fontSize: 15,
+    color: buddiColors.textPrimary,
+    lineHeight: 22,
+  },
+  interestsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  interestPill: {
+    backgroundColor: buddiColors.surfaceMuted,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+  },
+  interestPillText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: buddiColors.textPrimary,
+  },
+  adventuresList: {
+    gap: 10,
+  },
+  adventureItem: {
+    flexDirection: 'row',
+    direction: 'ltr',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: buddiColors.surfaceMuted,
+    borderRadius: 10,
+    padding: 10,
+  },
+  adventurePhoto: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+  },
+  adventurePhotoPlaceholder: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: buddiColors.surfaceBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adventureInfo: {
+    flex: 1,
+  },
+  adventureTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: buddiColors.textPrimary,
+  },
+  adventureDates: {
+    fontSize: 12,
+    color: buddiColors.textSecondary,
+    marginTop: 2,
   },
 });
 

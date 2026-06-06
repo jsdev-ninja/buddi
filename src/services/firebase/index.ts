@@ -1,6 +1,7 @@
 // Import the functions you need from the SDKs you need
 import type { Group } from "@/entities/group";
 import type { Profile, ProfileInput } from "@/entities/profile";
+import { getDisplayName } from "@/lib/profile";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { initializeApp } from "firebase/app";
 import {
@@ -1096,7 +1097,7 @@ export const firebaseApi = {
 					let name = data.groupName || "Unknown";
 					if (!data.isGroup && otherParticipantIds.length > 0) {
 						const otherProfile = await firebaseApi.profiles.getProfile(otherParticipantIds[0]);
-						name = otherProfile?.name || "Unknown";
+						name = getDisplayName(otherProfile);
 					}
 
 					const lastMessageAt = data.lastMessageAt;
@@ -1138,7 +1139,7 @@ export const firebaseApi = {
 					const otherId = participants.find((id: string) => id !== userId);
 					if (otherId) {
 						const profile = await firebaseApi.profiles.getProfile(otherId);
-						name = profile?.name || "Unknown";
+						name = getDisplayName(profile);
 					}
 				}
 				return { name, participants, isGroup };

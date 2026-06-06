@@ -27,6 +27,11 @@ export const profileSchema = z.object({
 		endDate: z.string().optional(),
 	})).optional(),
 
+	// Couple profile fields (all optional for backwards compatibility)
+	kind: z.enum(["solo", "couple"]).optional(),
+	partnerName: z.string().max(100).optional(),
+	partnerAge: z.number().int().min(18).max(120).optional(),
+
 	// Timestamps (optional - will be set when creating)
 	createdAt: z.number().optional(), // JavaScript timestamp (Date.now())
 	updatedAt: z.number().optional(), // JavaScript timestamp (Date.now())

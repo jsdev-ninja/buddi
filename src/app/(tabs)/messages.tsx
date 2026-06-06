@@ -155,31 +155,50 @@ export default function MessagesScreen() {
           </View>
         ) : hasConversations ? (
           <View style={styles.conversationsList}>
-            {listItems.map((item) => (
-              <Pressable
-                key={item.id}
-                style={styles.conversationItem}
-                onPress={() => openChat(item)}
-              >
-                <View style={styles.conversationContent}>
-                  <Text style={styles.conversationName}>{item.name}</Text>
+            {listItems.map((item) => {
+              const isGroup = item.id.startsWith('group_');
+              return (
+                <Pressable
+                  key={item.id}
+                  style={styles.conversationItem}
+                  onPress={() => openChat(item)}
+                >
+                  {/* Avatar icon */}
+                  <View style={[styles.conversationAvatar, isGroup && styles.conversationAvatarGroup]}>
+                    <Feather
+                      name={isGroup ? 'users' : 'user'}
+                      size={18}
+                      color={isGroup ? buddiColors.primary : buddiColors.textSecondary}
+                    />
+                  </View>
+
+                  <View style={styles.conversationContent}>
+                    <View style={styles.conversationNameRow}>
+                      <Text style={styles.conversationName}>{item.name}</Text>
+                      {isGroup && (
+                        <View style={styles.groupPill}>
+                          <Text style={styles.groupPillText}>Group</Text>
+                        </View>
+                      )}
+                    </View>
+                    {item.isMatchOnly ? (
+                      <Text style={styles.conversationLastMessage} numberOfLines={1}>
+                        Match — tap to say hi
+                      </Text>
+                    ) : item.lastMessage ? (
+                      <Text style={styles.conversationLastMessage} numberOfLines={1}>
+                        {item.lastMessage}
+                      </Text>
+                    ) : null}
+                  </View>
                   {item.isMatchOnly ? (
-                    <Text style={styles.conversationLastMessage} numberOfLines={1}>
-                      Match — tap to say hi
-                    </Text>
-                  ) : item.lastMessage ? (
-                    <Text style={styles.conversationLastMessage} numberOfLines={1}>
-                      {item.lastMessage}
-                    </Text>
+                    <Feather name="message-circle" size={20} color={buddiColors.primary} />
+                  ) : item.timestamp ? (
+                    <Text style={styles.conversationTime}>{item.timestamp}</Text>
                   ) : null}
-                </View>
-                {item.isMatchOnly ? (
-                  <Feather name="message-circle" size={20} color={buddiColors.primary} />
-                ) : item.timestamp ? (
-                  <Text style={styles.conversationTime}>{item.timestamp}</Text>
-                ) : null}
-              </Pressable>
-            ))}
+                </Pressable>
+              );
+            })}
           </View>
         ) : (
           // Empty State
@@ -350,22 +369,52 @@ const styles = StyleSheet.create({
   },
   conversationItem: {
     flexDirection: 'row',
+    direction: 'ltr',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 12,
     backgroundColor: buddiColors.surface,
     borderBottomWidth: 1,
     borderBottomColor: buddiColors.surfaceBorder,
+    gap: 12,
+  },
+  conversationAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: buddiColors.surfaceMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  conversationAvatarGroup: {
+    backgroundColor: buddiColors.primaryMuted,
   },
   conversationContent: {
     flex: 1,
     gap: 4,
   },
+  conversationNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
   conversationName: {
     fontSize: 16,
     fontWeight: '600',
     color: buddiColors.textPrimary,
+  },
+  groupPill: {
+    backgroundColor: buddiColors.surfaceMuted,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  groupPillText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: buddiColors.primary,
   },
   conversationLastMessage: {
     fontSize: 14,

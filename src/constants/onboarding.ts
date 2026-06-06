@@ -1,3 +1,8 @@
+export const PROFILE_KIND_OPTIONS = [
+	{ value: "solo" as const, label: "Solo Traveler" },
+	{ value: "couple" as const, label: "Couple" },
+];
+
 // Interests for onboarding (choose up to 5) - matches design
 export const ONBOARDING_INTERESTS = [
 	"Hiking",

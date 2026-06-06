@@ -17,6 +17,13 @@ export type TravelerProfile = {
   interests: string[];
   adventurePlan?: string;
   gender?: string;
+  kind?: "solo" | "couple";
+  partnerName?: string;
+  partnerAge?: number;
+  // Additional profile detail fields for the scrollable discover card
+  photos?: string[];
+  prompts?: { question: string; answer: string }[];
+  completedAdventures?: { title: string; photo?: string; startDate?: string; endDate?: string }[];
 };
 
 export type AdventureGroup = {
