@@ -1,0 +1,1 @@
+- [Buddia security posture](project_buddia_security_posture.md) — open Firestore rules (defense-in-depth only), where Zod actually runs (call sites not service layer), profile write IDOR-safe via UID-as-docID, t() injection-safe

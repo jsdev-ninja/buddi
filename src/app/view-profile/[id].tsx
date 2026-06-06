@@ -1,15 +1,19 @@
+import { CouplePill } from '@/components/CouplePill';
 import { buddiColors } from '@/constants/theme';
 import { useAuth } from '@/context/AuthProvider';
 import type { Profile } from '@/entities/profile';
+import { t } from '@/lib/i18n/strings';
+import { getDisplayName, isCoupleProfile } from '@/lib/profile';
 import { firebaseApi } from '@/services/firebase';
 import { Feather } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ActivityIndicator,
   Alert,
-  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -64,6 +68,7 @@ export default function ViewProfileScreen() {
 
   const handleLike = async () => {
     if (!profile?.id || !user?.uid || actionLoading) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setActionLoading(true);
     try {
       await firebaseApi.likes.likeProfile(profile.id);
@@ -79,6 +84,7 @@ export default function ViewProfileScreen() {
 
   const handlePass = async () => {
     if (!profile?.id || !user?.uid || actionLoading) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setActionLoading(true);
     try {
       await firebaseApi.likes.dislikeProfile(profile.id);
@@ -101,6 +107,7 @@ export default function ViewProfileScreen() {
           style: 'destructive',
           onPress: async () => {
             if (!id || !user?.uid) return;
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
             setActionLoading(true);
             try {
               await firebaseApi.matches.unmatch(id);
@@ -122,7 +129,7 @@ export default function ViewProfileScreen() {
     setActionLoading(true);
     try {
       const convId = await firebaseApi.chat.createConversation([id], false);
-      const nameParam = encodeURIComponent(profile?.name || 'Unknown');
+      const nameParam = encodeURIComponent(getDisplayName(profile));
       router.replace(`/chat?id=${convId}&name=${nameParam}`);
     } catch (e) {
       Alert.alert('Error', 'Could not start chat.');
@@ -167,7 +174,7 @@ export default function ViewProfileScreen() {
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.photoContainer}>
-          <Image source={photoSource} style={styles.mainPhoto} resizeMode="cover" />
+          <Image source={photoSource} style={styles.mainPhoto} contentFit="cover" />
           {profile.verified && (
             <View style={styles.verifiedBadge}>
               <Feather name="check-circle" size={20} color={buddiColors.primary} />
@@ -175,10 +182,15 @@ export default function ViewProfileScreen() {
           )}
         </View>
 
-        <Text style={styles.name}>
-          {profile.name || 'Unknown'}
-          {profile.age && profile.age > 0 ? `, ${profile.age}` : ''}
-        </Text>
+        <View style={styles.nameRow}>
+          <Text style={styles.name} numberOfLines={1} ellipsizeMode="tail">
+            {getDisplayName(profile)}
+            {profile.age && profile.age > 0
+              ? `, ${profile.kind === 'couple' && profile.partnerAge ? `${profile.age} & ${profile.partnerAge}` : profile.age}`
+              : ''}
+          </Text>
+          {isCoupleProfile(profile) && <CouplePill variant="full" />}
+        </View>
         {(profile.location || profile.locationFlag) && (
           <View style={styles.locationRow}>
             <Feather name="map-pin" size={16} color={buddiColors.textSecondary} />
@@ -191,7 +203,9 @@ export default function ViewProfileScreen() {
 
         {profile.bio ? (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Bio</Text>
+            <Text style={styles.sectionTitle}>
+              {isCoupleProfile(profile) ? t('profile.aboutUs') : t('profile.aboutMe')}
+            </Text>
             <Text style={styles.bio}>{profile.bio}</Text>
           </View>
         ) : null}
@@ -222,7 +236,7 @@ export default function ViewProfileScreen() {
             <Text style={styles.sectionTitle}>Photos</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.gallery}>
               {profile.photos.map((uri, i) => (
-                <Image key={i} source={{ uri }} style={styles.galleryImage} resizeMode="cover" />
+                <Image key={i} source={{ uri }} style={styles.galleryImage} contentFit="cover" />
               ))}
             </ScrollView>
           </View>
@@ -315,7 +329,8 @@ const styles = StyleSheet.create({
   photoContainer: { position: 'relative', width: '100%', aspectRatio: 3 / 4, borderRadius: 16, overflow: 'hidden', marginBottom: 16 },
   mainPhoto: { width: '100%', height: '100%' },
   verifiedBadge: { position: 'absolute', top: 12, right: 12 },
-  name: { fontSize: 24, fontWeight: 'bold', color: buddiColors.textPrimary, marginBottom: 6 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  name: { fontSize: 24, fontWeight: 'bold', color: buddiColors.textPrimary, flex: 1 },
   locationRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 20 },
   locationText: { fontSize: 15, color: buddiColors.textSecondary },
   section: { marginBottom: 24 },

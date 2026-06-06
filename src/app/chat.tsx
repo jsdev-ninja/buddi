@@ -1,3 +1,4 @@
+import { CouplePill } from '@/components/CouplePill';
 import { buddiColors } from '@/constants/theme';
 import { useAuth } from '@/context/AuthProvider';
 import { setCurrentChatConversationId } from '@/context/NotificationProvider';
@@ -115,6 +116,7 @@ export default function ChatScreen() {
   const [members, setMembers] = useState(1);
   const [isGroupChat, setIsGroupChat] = useState(false);
   const [otherUserId, setOtherUserId] = useState<string | null>(null);
+  const [partnerKind, setPartnerKind] = useState<"solo" | "couple" | undefined>();
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [firebaseMessages, setFirebaseMessages] = useState<FirebaseMessage[]>([]);
@@ -152,6 +154,7 @@ export default function ChatScreen() {
           setChatName(conversation.name);
           setMembers(conversation.members || 1);
           setIsGroupChat(conversation.isGroup ?? false);
+          setPartnerKind(conversation.partnerKind);
           if (!conversation.isGroup && conversation.participantIds?.length >= 2) {
             const other = conversation.participantIds.find((p: string) => p !== user.uid);
             setOtherUserId(other ?? null);
@@ -160,6 +163,7 @@ export default function ChatScreen() {
           setChatName(convDoc.name);
           setMembers(convDoc.participants.length);
           setIsGroupChat(convDoc.isGroup);
+          setPartnerKind(convDoc.partnerKind);
           if (!convDoc.isGroup && convDoc.participants.length >= 2) {
             const other = convDoc.participants.find((p: string) => p !== user.uid);
             setOtherUserId(other ?? null);
@@ -286,7 +290,12 @@ export default function ChatScreen() {
           <Feather name="arrow-left" size={24} color={buddiColors.textPrimary} />
         </Pressable>
         <View style={styles.chatInfo}>
-          <Text style={styles.chatName}>{chatName}</Text>
+          <View style={styles.chatNameRow}>
+            <Text style={styles.chatName} numberOfLines={1} ellipsizeMode="tail">{chatName}</Text>
+            {partnerKind === "couple" && !isGroupChat && (
+              <CouplePill variant="compact" />
+            )}
+          </View>
           <View style={styles.chatMeta}>
             <Feather name="users" size={14} color={buddiColors.textSecondary} />
             <Text style={styles.chatMetaText}>{members} members</Text>
@@ -502,11 +511,17 @@ const styles = StyleSheet.create({
   chatInfo: {
     flex: 1,
   },
+  chatNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
   chatName: {
     fontSize: 18,
     fontWeight: '600',
     color: buddiColors.textPrimary,
-    marginBottom: 4,
+    flexShrink: 1,
   },
   chatMeta: {
     flexDirection: 'row',

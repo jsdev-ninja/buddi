@@ -1,9 +1,11 @@
+import { CouplePill } from '@/components/CouplePill';
 import { CreateGroupModal } from '@/components/CreateGroupModal';
 import { LogoIcon } from '@/components/LogoIcon';
 import { SettingsDropdown } from '@/components/SettingsDropdown';
 import { buddiColors } from '@/constants/theme';
 import { useAuth } from '@/context/AuthProvider';
 import type { GroupInput } from '@/entities/group';
+import { getDisplayName } from '@/lib/profile';
 import { firebaseApi } from '@/services/firebase';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -20,6 +22,7 @@ type ConversationItem = {
   isGroup?: boolean;
   isMatchOnly?: boolean;
   otherUserId?: string;
+  partnerKind?: "solo" | "couple";
 };
 
 function getConversationId(userId1: string, userId2: string): string {
@@ -33,6 +36,7 @@ export default function MessagesScreen() {
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [matches, setMatches] = useState<Array<{ matchId: string; userId: string; createdAt: number }>>([]);
   const [matchNames, setMatchNames] = useState<Record<string, string>>({});
+  const [matchKinds, setMatchKinds] = useState<Record<string, "solo" | "couple">>({});
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
@@ -55,13 +59,16 @@ export default function MessagesScreen() {
         setMatches(userMatches);
 
         const names: Record<string, string> = {};
+        const kinds: Record<string, "solo" | "couple"> = {};
         await Promise.all(
           userMatches.map(async (m) => {
             const profile = await firebaseApi.profiles.getProfile(m.userId);
-            names[m.userId] = profile?.name || 'Unknown';
+            names[m.userId] = getDisplayName(profile);
+            kinds[m.userId] = profile?.kind ?? "solo";
           })
         );
         setMatchNames(names);
+        setMatchKinds(kinds);
       } catch (error) {
         console.error('Error fetching messages data:', error);
       } finally {
@@ -91,9 +98,10 @@ export default function MessagesScreen() {
       name: matchNames[m.userId] ?? 'Unknown',
       isMatchOnly: true,
       otherUserId: m.userId,
+      partnerKind: matchKinds[m.userId] ?? "solo",
     }));
     return [...convItems, ...matchOnlyItems];
-  }, [conversations, matchesWithoutConversation, matchNames, user?.uid]);
+  }, [conversations, matchesWithoutConversation, matchNames, matchKinds, user?.uid]);
 
   const hasConversations = listItems.length > 0;
 
@@ -174,7 +182,10 @@ export default function MessagesScreen() {
 
                   <View style={styles.conversationContent}>
                     <View style={styles.conversationNameRow}>
-                      <Text style={styles.conversationName}>{item.name}</Text>
+                      <Text style={styles.conversationName} numberOfLines={1} ellipsizeMode="tail">{item.name}</Text>
+                      {item.partnerKind === "couple" && !isGroup && (
+                        <CouplePill variant="compact" />
+                      )}
                       {isGroup && (
                         <View style={styles.groupPill}>
                           <Text style={styles.groupPillText}>Group</Text>

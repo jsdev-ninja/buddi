@@ -1,3 +1,4 @@
+import { CouplePill } from '@/components/CouplePill';
 import { EditAnswersModal } from '@/components/EditAnswersModal';
 import { EditCompletedAdventuresModal } from '@/components/EditCompletedAdventuresModal';
 import { EditProfileModal } from '@/components/EditProfileModal';
@@ -6,7 +7,9 @@ import { SettingsDropdown } from '@/components/SettingsDropdown';
 import { buddiColors } from '@/constants/theme';
 import { useAuth } from '@/context/AuthProvider';
 import type { Profile, ProfileInput } from '@/entities/profile';
+import { t } from '@/lib/i18n/strings';
 import { Card } from '@/lib/components/Card';
+import { getDisplayName, isCoupleProfile } from '@/lib/profile';
 import { firebaseApi } from '@/services/firebase';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -135,9 +138,16 @@ export default function ProfileScreen() {
           {/* Profile Info */}
           <View style={styles.profileInfo}>
             <View style={styles.nameRow}>
-              <Text style={styles.name}>{profile.name || 'No name'}</Text>
+              <View style={styles.nameWithPill}>
+                <Text style={styles.name}>{getDisplayName(profile)}</Text>
+                {isCoupleProfile(profile) && <CouplePill variant="full" />}
+              </View>
               {profile.age != null && profile.age > 0 ? (
-                <Text style={styles.age}>{profile.age}</Text>
+                <Text style={styles.age}>
+                  {isCoupleProfile(profile) && profile.partnerAge != null
+                    ? `${profile.age} & ${profile.partnerAge}`
+                    : profile.age}
+                </Text>
               ) : null}
             </View>
             <View style={styles.locationRow}>
@@ -167,9 +177,11 @@ export default function ProfileScreen() {
           </View>
         </Card>
 
-        {/* About Me Section */}
+        {/* About Me / About Us Section */}
         <Card style={styles.section}>
-          <Text style={styles.sectionTitle}>About Me</Text>
+          <Text style={styles.sectionTitle}>
+            {isCoupleProfile(profile) ? t('profile.aboutUs') : t('profile.aboutMe')}
+          </Text>
           <Text style={styles.bioText}>{profile.bio || 'No bio yet.'}</Text>
         </Card>
 
@@ -402,6 +414,9 @@ export default function ProfileScreen() {
           bio: profile.bio,
           interests: profile.interests || [],
           photos: profile.photos || [],
+          kind: profile.kind,
+          partnerName: profile.partnerName,
+          partnerAge: profile.partnerAge,
         }}
       />
     </View>
@@ -494,6 +509,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  nameWithPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 1,
   },
   name: {
     fontSize: 24,

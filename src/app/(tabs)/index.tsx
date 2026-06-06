@@ -3,6 +3,7 @@ import {
 	DiscoverFilterModal,
 	type DiscoverFilterState,
 } from '@/components/DiscoverFilterModal';
+import { CouplePill } from '@/components/CouplePill';
 import { LogoIcon } from '@/components/LogoIcon';
 import { SettingsDropdown } from '@/components/SettingsDropdown';
 import { SwipeableCard } from '@/components/SwipeableCard';
@@ -12,6 +13,8 @@ import type { Group } from '@/entities/group';
 import type { Profile } from '@/entities/profile';
 import { Card } from '@/lib/components/Card';
 import type { AdventureGroup, TravelerProfile } from '@/lib/data/mockData';
+import { getDisplayName, isCoupleProfile } from '@/lib/profile';
+import { t } from '@/lib/i18n/strings';
 import { firebaseApi } from '@/services/firebase';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -74,6 +77,9 @@ export default function DiscoverScreen() {
             photos: profile.photos || [],
             prompts: profile.prompts || [],
             completedAdventures: profile.completedAdventures || [],
+            kind: profile.kind,
+            partnerName: profile.partnerName,
+            partnerAge: profile.partnerAge,
           };
         });
 
@@ -285,9 +291,10 @@ export default function DiscoverScreen() {
                       style={styles.travelerPhotoGradient}
                     >
                       <View style={styles.profileOverlay}>
-                        <Text style={styles.profileName}>
-                          {current.data.name}{current.data.age > 0 ? `, ${current.data.age}` : ''}
+                        <Text style={styles.profileName} numberOfLines={1} ellipsizeMode="tail">
+                          {getDisplayName(current.data)}{current.data.age > 0 ? `, ${current.data.kind === 'couple' && current.data.partnerAge ? `${current.data.age} & ${current.data.partnerAge}` : current.data.age}` : ''}
                         </Text>
+                        {isCoupleProfile(current.data) && <CouplePill variant="full" />}
                         {(current.data.location || current.data.locationFlag) && (
                           <View style={styles.locationRow}>
                             <Feather name="map-pin" size={14} color={buddiColors.textOnDark} />
@@ -339,10 +346,21 @@ export default function DiscoverScreen() {
                       </View>
                     )}
 
+                    {/* Partners mini-row (couple only) */}
+                    {isCoupleProfile(current.data) && !!current.data.partnerName && (
+                      <View style={styles.detailSection}>
+                        <Text style={styles.partnersRow}>
+                          {`${current.data.name} · ${current.data.age}   /   ${current.data.partnerName} · ${current.data.partnerAge ?? '?'}`}
+                        </Text>
+                      </View>
+                    )}
+
                     {/* Bio */}
                     {!!current.data.bio && (
                       <View style={styles.detailSection}>
-                        <Text style={styles.detailSectionTitle}>About me</Text>
+                        <Text style={styles.detailSectionTitle}>
+                          {isCoupleProfile(current.data) ? t('profile.aboutUs') : t('profile.aboutMe')}
+                        </Text>
                         <Text style={styles.detailBioText}>{current.data.bio}</Text>
                       </View>
                     )}
@@ -835,6 +853,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: buddiColors.textPrimary,
     lineHeight: 22,
+  },
+  partnersRow: {
+    fontSize: 13,
+    color: buddiColors.textSecondary,
+    lineHeight: 18,
   },
   photoGrid: {
     flexDirection: 'row',

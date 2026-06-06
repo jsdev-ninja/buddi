@@ -14,6 +14,7 @@ export const strings = {
       couplePillLabel: "Couple",
     },
     edit: {
+      profileTypeLabel: "Profile Type",
       switchToSoloNote: "Switching to Solo will hide partner details. They'll be restored if you switch back.",
       sharedBioNote: "Your bio text is shared between solo and couple modes.",
     },

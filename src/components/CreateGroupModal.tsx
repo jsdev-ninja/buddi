@@ -1,8 +1,10 @@
+import { CouplePill } from '@/components/CouplePill';
 import { buddiColors } from '@/constants/theme';
 import type { Profile } from '@/entities/profile';
 import type { GroupInput } from '@/entities/group';
 import { ActivityTypeEnum, DifficultyEnum, groupInputSchema, PrivacyEnum } from '@/entities/group';
 import { useAuth } from '@/context/AuthProvider';
+import { getDisplayName, isCoupleProfile } from '@/lib/profile';
 import { firebaseApi } from '@/services/firebase';
 import { Feather } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -763,7 +765,12 @@ export function CreateGroupModal({ visible, onClose, onSubmit, mode = 'create', 
 													}}
 												>
 													<View style={styles.participantInfo}>
-														<Text style={styles.participantName}>{profile.name || 'Unknown'}</Text>
+														<View style={styles.participantNameRow}>
+															<Text style={styles.participantName} numberOfLines={1} ellipsizeMode="tail">
+																{getDisplayName(profile)}
+															</Text>
+															{isCoupleProfile(profile) && <CouplePill variant="compact" />}
+														</View>
 														{displayLocation ? (
 															<Text style={styles.participantLocation}>{displayLocation}</Text>
 														) : null}
@@ -1182,11 +1189,18 @@ const styles = StyleSheet.create({
 	participantInfo: {
 		flex: 1,
 	},
+	participantNameRow: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 6,
+		overflow: 'hidden',
+	},
 	participantName: {
 		fontSize: 16,
 		fontWeight: '600',
 		color: buddiColors.textPrimary,
 		marginBottom: 4,
+		flexShrink: 1,
 	},
 	participantLocation: {
 		fontSize: 14,

@@ -657,6 +657,7 @@ export const firebaseApi = {
 				if (convSnap.exists()) {
 					await updateDoc(conversationRef, {
 						participants: arrayUnion(userId),
+						[`unreadCount.${userId}`]: 0,
 						updatedAt: Date.now(),
 					});
 				}
@@ -1075,6 +1076,7 @@ export const firebaseApi = {
 			members?: number;
 			isGroup?: boolean;
 			participantIds: string[];
+			partnerKind?: "solo" | "couple";
 		}[]> => {
 			try {
 				const conversationsQuery = query(
@@ -1092,6 +1094,7 @@ export const firebaseApi = {
 					members?: number;
 					isGroup?: boolean;
 					participantIds: string[];
+					partnerKind?: "solo" | "couple";
 				}[] = [];
 
 				for (const docSnapshot of snapshot.docs) {
@@ -1101,9 +1104,11 @@ export const firebaseApi = {
 					// For group chats, use group name
 					// For 1-on-1, fetch the other participant's profile name
 					let name = data.groupName || "Unknown";
+					let partnerKind: "solo" | "couple" | undefined;
 					if (!data.isGroup && otherParticipantIds.length > 0) {
 						const otherProfile = await firebaseApi.profiles.getProfile(otherParticipantIds[0]);
 						name = getDisplayName(otherProfile);
+						partnerKind = otherProfile?.kind ?? "solo";
 					}
 
 					const lastMessageAt = data.lastMessageAt;
@@ -1119,6 +1124,7 @@ export const firebaseApi = {
 						members: data.participants.length,
 						isGroup: data.isGroup || false,
 						participantIds: data.participants,
+						partnerKind,
 					});
 				}
 
@@ -1132,7 +1138,7 @@ export const firebaseApi = {
 		getConversation: async (
 			conversationId: string,
 			userId: string
-		): Promise<{ name: string; participants: string[]; isGroup: boolean } | null> => {
+		): Promise<{ name: string; participants: string[]; isGroup: boolean; partnerKind?: "solo" | "couple" } | null> => {
 			try {
 				const conversationRef = doc(db, "conversations", conversationId);
 				const conversationDoc = await getDoc(conversationRef);
@@ -1141,14 +1147,16 @@ export const firebaseApi = {
 				const participants = data.participants || [];
 				const isGroup = data.isGroup || false;
 				let name = data.groupName || "Unknown";
+				let partnerKind: "solo" | "couple" | undefined;
 				if (!isGroup) {
 					const otherId = participants.find((id: string) => id !== userId);
 					if (otherId) {
 						const profile = await firebaseApi.profiles.getProfile(otherId);
 						name = getDisplayName(profile);
+						partnerKind = profile?.kind ?? "solo";
 					}
 				}
-				return { name, participants, isGroup };
+				return { name, participants, isGroup, partnerKind };
 			} catch (error) {
 				console.error("Error fetching conversation:", error);
 				return null;

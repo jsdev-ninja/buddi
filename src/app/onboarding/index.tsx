@@ -1,6 +1,8 @@
-import { COUNTRIES, GENDER_OPTIONS, ONBOARDING_INTERESTS } from "@/constants/onboarding";
+import { COUNTRIES, GENDER_OPTIONS, ONBOARDING_INTERESTS, PROFILE_KIND_OPTIONS } from "@/constants/onboarding";
 import { buddiColors } from "@/constants/theme";
+import { t } from "@/lib/i18n/strings";
 import { useAuth } from "@/context/AuthProvider";
+import { profileInputSchema } from "@/entities/profile";
 import { firebaseApi } from "@/services/firebase";
 import { Feather } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -32,11 +34,16 @@ function getAgeFromBirthday(birthdayMs: number): number {
 
 export default function OnboardingScreen() {
 	const { user } = useAuth();
-	const [step, setStep] = useState(1);
+	const [step, setStep] = useState(0);
 	const [saving, setSaving] = useState(false);
+
+	// Step 0
+	const [kind, setKind] = useState<"solo" | "couple">("solo");
 
 	// Step 1
 	const [name, setName] = useState("");
+	const [partnerName, setPartnerName] = useState("");
+	const [partnerAge, setPartnerAge] = useState("");
 	const [birthdayText, setBirthdayText] = useState("");
 	const [birthdayMs, setBirthdayMs] = useState<number | null>(null);
 	const [gender, setGender] = useState("");
@@ -124,11 +131,18 @@ export default function OnboardingScreen() {
 
 	const age = birthdayMs != null ? getAgeFromBirthday(birthdayMs) : 0;
 	const isAgeValid = age >= 18;
-	const canNextStep1 = name.trim().length > 0 && birthdayMs != null && gender.length > 0 && isAgeValid;
+	const partnerAgeNum = partnerAge.trim() !== "" ? Number(partnerAge) : NaN;
+	const isPartnerAgeValid = !isNaN(partnerAgeNum) && partnerAgeNum >= 18;
+	const coupleFieldsValid = kind !== "couple" || (partnerName.trim().length > 0 && isPartnerAgeValid);
+	const canNextStep1 = name.trim().length > 0 && birthdayMs != null && gender.length > 0 && isAgeValid && coupleFieldsValid;
 	const canNextStep2 = !!mainPhoto;
 	const canFinish = selectedInterests.length > 0;
 
 	const handleNext = () => {
+		if (step === 0) {
+			setStep(1);
+			return;
+		}
 		if (step === 1) {
 			if (!isAgeValid) {
 				Alert.alert(
@@ -154,6 +168,18 @@ export default function OnboardingScreen() {
 			}
 			const bday = birthdayMs ?? (birthdayText.trim() ? new Date(birthdayText).getTime() : undefined);
 			const age = bday != null ? getAgeFromBirthday(bday) : undefined;
+			const coupleFields = kind === "couple"
+				? { partnerName: partnerName.trim(), partnerAge: Number(partnerAge) }
+				: {};
+			if (kind === "couple") {
+				const coupleValidation = profileInputSchema
+					.pick({ partnerName: true, partnerAge: true })
+					.safeParse({ partnerName: partnerName.trim(), partnerAge: Number(partnerAge) });
+				if (!coupleValidation.success) {
+					Alert.alert("Invalid partner details", coupleValidation.error.issues[0]?.message ?? "Please check partner name and age.");
+					return;
+				}
+			}
 			await firebaseApi.profiles.create({
 				type: "profile",
 				userId,
@@ -167,6 +193,8 @@ export default function OnboardingScreen() {
 				adventurePlan: adventurePlan.trim() || undefined,
 				country: country || undefined,
 				interests: selectedInterests,
+				kind,
+				...coupleFields,
 			});
 			router.replace("/(tabs)");
 		} catch (e) {
@@ -187,6 +215,37 @@ export default function OnboardingScreen() {
 				keyboardShouldPersistTaps="handled"
 				showsVerticalScrollIndicator={false}
 			>
+				{/* Step 0: Profile type selector */}
+				{step === 0 && (
+					<View style={styles.card}>
+						<Text style={styles.title}>How are you traveling?</Text>
+						<Text style={styles.subtitle}>Tell us how you&apos;d like to present yourself on Buddia.</Text>
+
+						{PROFILE_KIND_OPTIONS.map((opt) => (
+							<TouchableOpacity
+								key={opt.value}
+								style={[styles.kindOption, kind === opt.value && styles.kindOptionSelected]}
+								onPress={() => setKind(opt.value)}
+								activeOpacity={0.8}
+							>
+								<Text style={[styles.kindOptionText, kind === opt.value && styles.kindOptionTextSelected]}>
+									{t(`onboarding.profileKind.${opt.value}`)}
+								</Text>
+							</TouchableOpacity>
+						))}
+
+						<TouchableOpacity style={styles.primaryButton} onPress={handleNext}>
+							<Text style={styles.primaryButtonText}>Continue</Text>
+							<Feather name="arrow-right" size={20} color="#fff" />
+						</TouchableOpacity>
+
+						<TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+							<Feather name="arrow-left" size={18} color={buddiColors.textSecondary} />
+							<Text style={styles.backButtonText}>Back</Text>
+						</TouchableOpacity>
+					</View>
+				)}
+
 				{/* Step 1: Welcome */}
 				{step === 1 && (
 					<View style={styles.card}>
@@ -249,6 +308,33 @@ export default function OnboardingScreen() {
 							</Text>
 							<Feather name="chevron-down" size={20} color={buddiColors.textTertiary} />
 						</TouchableOpacity>
+
+						{kind === "couple" && (
+							<>
+								<Text style={styles.label}>{t("onboarding.partnerName")}</Text>
+								<TextInput
+									style={styles.input}
+									placeholder={t("onboarding.partnerName")}
+									placeholderTextColor={buddiColors.textTertiary}
+									value={partnerName}
+									onChangeText={setPartnerName}
+									autoCapitalize="words"
+								/>
+
+								<Text style={styles.label}>{t("onboarding.partnerAge")}</Text>
+								<TextInput
+									style={styles.input}
+									placeholder={t("onboarding.partnerAge")}
+									placeholderTextColor={buddiColors.textTertiary}
+									value={partnerAge}
+									onChangeText={setPartnerAge}
+									keyboardType="number-pad"
+								/>
+								{partnerAge.trim() !== "" && !isPartnerAgeValid && (
+									<Text style={styles.errorText}>{t("onboarding.partnerAgeError")}</Text>
+								)}
+							</>
+						)}
 
 						<TouchableOpacity
 							style={[styles.primaryButton, !canNextStep1 && styles.primaryButtonDisabled]}
@@ -332,10 +418,10 @@ export default function OnboardingScreen() {
 							))}
 						</View>
 
-						<Text style={styles.label}>Your Bio</Text>
+						<Text style={styles.label}>{kind === "couple" ? t("profile.aboutUs") : t("profile.aboutMe")}</Text>
 						<TextInput
 							style={[styles.input, styles.bioInput]}
-							placeholder="Tell us about your travel style, what you love, and what you're looking for in a travel buddi..."
+							placeholder={kind === "couple" ? t("profile.aboutUsPlaceholder") : t("profile.aboutMePlaceholder")}
 							placeholderTextColor={buddiColors.textTertiary}
 							value={bio}
 							onChangeText={setBio}
@@ -764,5 +850,37 @@ const styles = StyleSheet.create({
 	},
 	countryScroll: {
 		maxHeight: 400,
+	},
+	kindOption: {
+		paddingVertical: 18,
+		paddingHorizontal: 20,
+		borderRadius: 12,
+		borderWidth: 2,
+		borderColor: buddiColors.surfaceBorder,
+		marginBottom: 12,
+		alignItems: "center",
+	},
+	kindOptionSelected: {
+		borderColor: buddiColors.primary,
+		backgroundColor: buddiColors.primaryMuted,
+	},
+	kindOptionText: {
+		fontSize: 16,
+		fontWeight: "600",
+		color: buddiColors.textPrimary,
+	},
+	kindOptionTextSelected: {
+		color: buddiColors.primary,
+	},
+	backButton: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "center",
+		marginTop: 12,
+		gap: 6,
+	},
+	backButtonText: {
+		fontSize: 15,
+		color: buddiColors.textSecondary,
 	},
 });

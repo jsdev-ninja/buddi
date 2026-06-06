@@ -1,6 +1,8 @@
 import { buddiColors } from '@/constants/theme';
 import type { ProfileInput } from '@/entities/profile';
 import { profileInputSchema } from '@/entities/profile';
+import { t } from '@/lib/i18n/strings';
+import { getDisplayName } from '@/lib/profile';
 import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
@@ -52,6 +54,7 @@ export function EditProfileModal({ visible, onClose, onSubmit, initialData }: Ed
 	const insets = useSafeAreaInsets();
 	const [formData, setFormData] = useState<Partial<ProfileInput>>({
 		interests: [],
+		kind: 'solo',
 		...initialData,
 	});
 	const [errors, setErrors] = useState<Record<string, string>>({});
@@ -62,6 +65,7 @@ export function EditProfileModal({ visible, onClose, onSubmit, initialData }: Ed
 		if (visible && initialData) {
 			setFormData({
 				interests: [],
+				kind: 'solo',
 				...initialData,
 			});
 			setPhotos(initialData?.photos || []);
@@ -74,13 +78,20 @@ export function EditProfileModal({ visible, onClose, onSubmit, initialData }: Ed
 	};
 
 	const handleSubmit = async () => {
+		const isCouple = formData.kind === 'couple';
+		if (isCouple && !formData.partnerName?.trim()) {
+			setErrors((prev) => ({ ...prev, partnerName: t('onboarding.partnerName') + ' is required' }));
+			return;
+		}
+		if (isCouple && (formData.partnerAge == null || formData.partnerAge < 18)) {
+			setErrors((prev) => ({ ...prev, partnerAge: t('onboarding.partnerAgeError') }));
+			return;
+		}
 		try {
-			// Photos will be handled separately - they need to be uploaded first
-			// For now, we'll pass the photos array as-is and let the parent handle upload
 			const dataToValidate = {
 				...formData,
 				interests: formData.interests || [],
-				photos: photos, // Include photos in the data
+				photos: photos,
 			};
 			const validated = profileInputSchema.parse(dataToValidate);
 			onSubmit(validated);
@@ -175,7 +186,7 @@ export function EditProfileModal({ visible, onClose, onSubmit, initialData }: Ed
 				<View style={styles.header}>
 					<View style={styles.headerLeft}>
 						<Feather name="user" size={24} color={buddiColors.primary} />
-						<Text style={styles.title}>Edit Profile</Text>
+						<Text style={styles.title}>{`Edit Profile · ${getDisplayName(formData)}`}</Text>
 					</View>
 					<Pressable onPress={onClose} style={styles.closeButton}>
 						<Feather name="x" size={24} color={buddiColors.textPrimary} />
@@ -188,6 +199,44 @@ export function EditProfileModal({ visible, onClose, onSubmit, initialData }: Ed
 					showsVerticalScrollIndicator={false}
 				>
 					<View style={styles.formContent}>
+						{/* Profile Type */}
+						<View style={styles.field}>
+							<Text style={styles.label}>{t('edit.profileTypeLabel')}</Text>
+							<View style={styles.segmentedControl}>
+								<TouchableOpacity
+									style={[
+										styles.segmentButton,
+										formData.kind !== 'couple' && styles.segmentButtonSelected,
+									]}
+									onPress={() => updateField('kind', 'solo')}
+								>
+									<Text style={[
+										styles.segmentButtonText,
+										formData.kind !== 'couple' && styles.segmentButtonTextSelected,
+									]}>
+										{t('onboarding.profileKind.solo')}
+									</Text>
+								</TouchableOpacity>
+								<TouchableOpacity
+									style={[
+										styles.segmentButton,
+										formData.kind === 'couple' && styles.segmentButtonSelected,
+									]}
+									onPress={() => updateField('kind', 'couple')}
+								>
+									<Text style={[
+										styles.segmentButtonText,
+										formData.kind === 'couple' && styles.segmentButtonTextSelected,
+									]}>
+										{t('onboarding.profileKind.couple')}
+									</Text>
+								</TouchableOpacity>
+							</View>
+							{formData.kind !== 'couple' && (
+								<Text style={styles.switchNote}>{t('edit.switchToSoloNote')}</Text>
+							)}
+						</View>
+
 						{/* Name */}
 						<View style={styles.field}>
 							<Text style={styles.label}>Name</Text>
@@ -199,6 +248,36 @@ export function EditProfileModal({ visible, onClose, onSubmit, initialData }: Ed
 							/>
 							{errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
 						</View>
+
+						{/* Partner fields — only shown when Couple */}
+						{formData.kind === 'couple' && (
+							<>
+								<View style={styles.field}>
+									<Text style={styles.label}>{t('onboarding.partnerName')}</Text>
+									<TextInput
+										style={[styles.input, errors.partnerName && styles.inputError]}
+										placeholder={t('onboarding.partnerName')}
+										value={formData.partnerName || ''}
+										onChangeText={(text) => updateField('partnerName', text)}
+									/>
+									{errors.partnerName && <Text style={styles.errorText}>{errors.partnerName}</Text>}
+								</View>
+								<View style={styles.field}>
+									<Text style={styles.label}>{t('onboarding.partnerAge')}</Text>
+									<TextInput
+										style={[styles.input, errors.partnerAge && styles.inputError]}
+										placeholder={t('onboarding.partnerAge')}
+										keyboardType="numeric"
+										value={formData.partnerAge?.toString() || ''}
+										onChangeText={(text) => {
+											const num = parseInt(text);
+											updateField('partnerAge', isNaN(num) ? undefined : num);
+										}}
+									/>
+									{errors.partnerAge && <Text style={styles.errorText}>{errors.partnerAge}</Text>}
+								</View>
+							</>
+						)}
 
 						{/* Age */}
 						<View style={styles.field}>
@@ -246,10 +325,12 @@ export function EditProfileModal({ visible, onClose, onSubmit, initialData }: Ed
 
 						{/* Bio */}
 						<View style={styles.field}>
-							<Text style={styles.label}>Bio</Text>
+							<Text style={styles.label}>
+								{formData.kind === 'couple' ? t('profile.aboutUs') : t('profile.aboutMe')}
+							</Text>
 							<TextInput
 								style={[styles.textArea, errors.bio && styles.inputError]}
-								placeholder="Tell everyone about yourself..."
+								placeholder={formData.kind === 'couple' ? t('profile.aboutUsPlaceholder') : t('profile.aboutMePlaceholder')}
 								multiline
 								numberOfLines={4}
 								value={formData.bio || ''}
@@ -641,5 +722,35 @@ const styles = StyleSheet.create({
 		backgroundColor: 'rgba(255, 255, 255, 0.9)',
 		alignItems: 'center',
 		justifyContent: 'center',
+	},
+	segmentedControl: {
+		flexDirection: 'row',
+		borderRadius: 12,
+		overflow: 'hidden',
+		borderWidth: 1,
+		borderColor: buddiColors.surfaceBorder,
+	},
+	segmentButton: {
+		flex: 1,
+		paddingVertical: 10,
+		alignItems: 'center',
+		backgroundColor: buddiColors.surfaceMuted,
+	},
+	segmentButtonSelected: {
+		backgroundColor: buddiColors.primary,
+	},
+	segmentButtonText: {
+		fontSize: 14,
+		fontWeight: '600',
+		color: buddiColors.textPrimary,
+	},
+	segmentButtonTextSelected: {
+		color: '#fff',
+	},
+	switchNote: {
+		fontSize: 12,
+		color: buddiColors.textSecondary,
+		marginTop: 8,
+		fontStyle: 'italic',
 	},
 });

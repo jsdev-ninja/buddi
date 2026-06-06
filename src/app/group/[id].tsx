@@ -1,3 +1,4 @@
+import { CouplePill } from '@/components/CouplePill';
 import { CreateGroupModal } from '@/components/CreateGroupModal';
 import { buddiColors } from '@/constants/theme';
 import { useAuth } from '@/context/AuthProvider';
@@ -6,6 +7,7 @@ import type { Profile } from '@/entities/profile';
 import { userGroupsAtom } from '@/lib/atoms/groups';
 import { Card } from '@/lib/components/Card';
 import type { AdventureGroup } from '@/lib/data/mockData';
+import { getDisplayName, isCoupleProfile } from '@/lib/profile';
 import { firebaseApi } from '@/services/firebase';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -47,7 +49,13 @@ function groupToAdventureGroup(group: Group): AdventureGroup {
   };
 }
 
-type LikerWithProfile = { userId: string; createdAt: number; name: string };
+type LikerWithProfile = {
+  userId: string;
+  createdAt: number;
+  name?: string | null;
+  kind?: 'solo' | 'couple' | null;
+  partnerName?: string | null;
+};
 
 export default function GroupDetailScreen() {
   const insets = useSafeAreaInsets();
@@ -94,7 +102,9 @@ export default function GroupDetailScreen() {
           withNames.push({
             userId,
             createdAt,
-            name: profile?.name || 'Unknown',
+            name: profile?.name,
+            kind: profile?.kind,
+            partnerName: profile?.partnerName,
           });
         }
         if (!cancelled) setGroupLikes(withNames);
@@ -286,7 +296,12 @@ export default function GroupDetailScreen() {
               const adding = addingUserId === liker.userId;
               return (
                 <View key={liker.userId} style={styles.likerRow}>
-                  <Text style={styles.likerName}>{liker.name}</Text>
+                  <View style={styles.likerNameRow}>
+                    <Text style={styles.likerName} numberOfLines={1} ellipsizeMode="tail">
+                      {getDisplayName(liker)}
+                    </Text>
+                    {isCoupleProfile(liker) && <CouplePill variant="compact" />}
+                  </View>
                   {alreadyInGroup ? (
                     <View style={styles.addedBadge}>
                       <Text style={styles.addedBadgeText}>In group</Text>
@@ -523,10 +538,19 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 8,
   },
+  likerNameRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginRight: 8,
+    overflow: 'hidden',
+  },
   likerName: {
     fontSize: 16,
     fontWeight: '500',
     color: buddiColors.textPrimary,
+    flexShrink: 1,
   },
   addButton: {
     flexDirection: 'row',

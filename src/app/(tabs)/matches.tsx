@@ -1,9 +1,11 @@
-import { SettingsDropdown } from '@/components/SettingsDropdown';
+import { CouplePill } from '@/components/CouplePill';
 import { LogoIcon } from '@/components/LogoIcon';
+import { SettingsDropdown } from '@/components/SettingsDropdown';
 import { buddiColors } from '@/constants/theme';
 import { useAuth } from '@/context/AuthProvider';
 import type { Profile } from '@/entities/profile';
 import { Card } from '@/lib/components/Card';
+import { getDisplayName, isCoupleProfile } from '@/lib/profile';
 import { firebaseApi } from '@/services/firebase';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -50,10 +52,11 @@ function ProfileCard({
               style={styles.travelerPhotoGradient}
             >
               <View style={styles.profileOverlay}>
-                <Text style={styles.profileName}>
-                  {profile.name || 'Unknown'}
+                <Text style={styles.profileName} numberOfLines={1} ellipsizeMode="tail">
+                  {getDisplayName(profile)}
                   {profile.age && profile.age > 0 ? `, ${profile.age}` : ''}
                 </Text>
+                {isCoupleProfile(profile) && <CouplePill variant="compact" />}
                 {(profile.location || profile.locationFlag) && (
                   <View style={styles.locationRow}>
                     <Feather name="map-pin" size={10} color={buddiColors.textOnDark} />
@@ -286,7 +289,7 @@ export default function MatchesScreen() {
                   <ProfileCard
                     key={profile.id}
                     profile={profile}
-                    onPress={() => openChatWithMatch(profile.userId, profile.name || 'Unknown')}
+                    onPress={() => openChatWithMatch(profile.userId, getDisplayName(profile))}
                     actionLabel="Message"
                   />
                 ))}
